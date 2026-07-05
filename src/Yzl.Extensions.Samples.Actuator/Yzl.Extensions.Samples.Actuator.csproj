@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Yzl.Extensions.Samples.Actuator</RootNamespace>
+  </PropertyGroup>
+
+  <!-- 开发模式：源码引用（需 ../dotnet-extensions 存在） -->
+  <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Actuator\Yzl.Extensions.Actuator.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Core\Yzl.Extensions.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 默认模式：NuGet 包引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
+    <PackageReference Include="Yzl.Extensions.Actuator" />
+    <PackageReference Include="Yzl.Extensions.Core" />
+  </ItemGroup>
+
+  <!-- 公共测试面板 -->
+  <ItemGroup>
+    <ProjectReference Include="..\Yzl.Extensions.Samples.TestDashboard\Yzl.Extensions.Samples.TestDashboard.csproj" />
+  </ItemGroup>
+</Project>

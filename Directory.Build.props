@@ -1,0 +1,26 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8603;CS0168;</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      默认使用 NuGet 包引用（面向使用者/发布场景）。
+      开发者设置 -p:UseProjectReference=true 可切换为源码引用（需 ../dotnet-extensions 存在）。
+    -->
+    <UseProjectReference Condition="'$(UseProjectReference)' == ''">false</UseProjectReference>
+  </PropertyGroup>
+
+  <!-- .NET 4.8 项目特殊处理 -->
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4'))">
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>12</LangVersion>
+  </PropertyGroup>
+
+</Project>

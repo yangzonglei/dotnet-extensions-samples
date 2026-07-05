@@ -1,0 +1,11 @@
+<Project>
+
+  <Target Name="Info_BeforeBuild" BeforeTargets="CoreCompile">
+    <Message Importance="high" Text="=== Building $(MSBuildProjectName) [$(Configuration)|$(TargetFramework)] ===" />
+  </Target>
+
+  <Target Name="CopyRuntimeConfig" AfterTargets="Build" Condition="Exists('appsettings.json')">
+    <Copy SourceFiles="appsettings.json" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

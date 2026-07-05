@@ -1,0 +1,37 @@
+## .NET
+artifacts/
+bin/
+obj/
+packages/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## 发布输出
+publish/
+*.publish.xml
+
+## VS 相关
+.vs/
+.vscode/
+*.csproj.user
+*.dbmdl
+*.log
+
+## NuGet
+*.nupkg
+
+## 用户配置文件
+
+## 运行时
+*.pid
+*.seed
+*.pid.lock
+
+## 其他
+.idea/
+*.DS_Store
+
+## BenchmarkDotNet
+BenchmarkDotNet.Artifacts/

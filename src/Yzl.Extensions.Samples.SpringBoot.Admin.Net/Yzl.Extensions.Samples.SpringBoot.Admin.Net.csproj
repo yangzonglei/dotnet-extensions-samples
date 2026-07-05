@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Yzl.Extensions.Samples.SpringBoot.Admin.Net</RootNamespace>
+  </PropertyGroup>
+
+  <!-- 开发模式：源码引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.SpringBoot.Admin.Client.Net\Yzl.Extensions.SpringBoot.Admin.Client.Net.csproj" />
+<!--    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Actuator\Yzl.Extensions.Actuator.csproj" />-->
+  </ItemGroup>
+
+  <!-- 默认模式：NuGet 包引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
+    <PackageReference Include="Yzl.Extensions.SpringBoot.Admin.Client.Net" />
+  </ItemGroup>
+
+  <!-- 两种模式都需要的 NuGet 包 -->
+  <ItemGroup>
+    <PackageReference Include="Yzl.Extensions.Core" />
+    <PackageReference Include="NLog.Web.AspNetCore" />
+  </ItemGroup>
+</Project>

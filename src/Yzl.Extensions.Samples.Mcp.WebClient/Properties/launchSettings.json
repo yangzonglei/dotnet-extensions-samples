@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "McpWebClient": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:16608",
+      "applicationUrl": "http://+:16608",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

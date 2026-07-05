@@ -1,0 +1,21 @@
+{
+  "profiles": {
+    "McpServer": {
+      "commandName": "Project",
+      "applicationUrl": "http://+:16607",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:16607",
+      "applicationUrl": "http://+:16607",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

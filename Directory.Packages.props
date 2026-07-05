@@ -1,0 +1,28 @@
+<Project>
+    <ItemGroup>
+        <!-- Yzl.Extensions 自有包 -->
+        <PackageVersion Include="Yzl.Extensions.Cache" Version="0.1.2"/>
+        <PackageVersion Include="Yzl.Extensions.Core" Version="1.0.0"/>
+        <PackageVersion Include="Yzl.Extensions.Actuator" Version="0.1.9"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign" Version="0.1.19"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Abstractions" Version="1.0.0"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.AOT" Version="0.1.2"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Net48" Version="0.1.1"/>
+        <PackageVersion Include="Yzl.Extensions.SpringBoot.Admin.Client.Net" Version="0.1.9"/>
+        <PackageVersion Include="Yzl.Extensions.Common" Version="0.1.4"/>
+        <PackageVersion Include="Yzl.Extensions.AI.Mcp" Version="0.1.0"/>
+
+        <!-- 基础设施 -->
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1"/>
+        <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.0"/>
+        <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0"/>
+        <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="8.0.0"/>
+
+        <!-- NLog -->
+        <PackageVersion Include="NLog" Version="5.3.2"/>
+        <PackageVersion Include="NLog.Web.AspNetCore" Version="5.3.11"/>
+
+        <!-- MCP -->
+        <PackageVersion Include="ModelContextProtocol.Core" Version="1.0.0"/>
+    </ItemGroup>
+</Project>

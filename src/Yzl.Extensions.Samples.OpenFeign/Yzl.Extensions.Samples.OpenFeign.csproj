@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Yzl.Extensions.Samples.OpenFeign</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Samples.Models\Samples.Models.csproj" />
+    <ProjectReference Include="..\Yzl.Extensions.Samples.TestDashboard\Yzl.Extensions.Samples.TestDashboard.csproj" />
+  </ItemGroup>
+
+  <!-- 开发模式：源码引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Core\Yzl.Extensions.Core.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign\Yzl.Extensions.Http.OpenFeign.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign.Abstractions\Yzl.Extensions.Http.OpenFeign.Abstractions.csproj" />
+  </ItemGroup>
+
+  <!-- 默认模式：NuGet 包引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
+    <PackageReference Include="Yzl.Extensions.Http.OpenFeign" />
+  </ItemGroup>
+
+  <!-- 两种模式都需要的 NuGet 包 -->
+  <ItemGroup>
+    <PackageReference Include="NLog.Web.AspNetCore" />
+  </ItemGroup>
+</Project>

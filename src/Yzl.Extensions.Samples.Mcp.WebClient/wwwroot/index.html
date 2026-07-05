@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Web Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #f5f5f5;
+            --card-bg: #fff;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --text: #1f2937;
+            --text-secondary: #6b7280;
+            --border: #e5e7eb;
+            --user-msg: #4f46e5;
+            --user-text: #fff;
+            --tool-bg: #fef3c7;
+            --tool-border: #f59e0b;
+            --success-bg: #d1fae5;
+            --success-border: #10b981;
+            --error-bg: #fee2e2;
+            --error-border: #ef4444;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+        header .status {
+            font-size: 13px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+        }
+        header .status.connected { background: #10b981; }
+        header .status.error { background: #ef4444; }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 侧边栏 - 工具列表 */
+        .sidebar {
+            width: 280px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar h2 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .sidebar .tool-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: var(--bg);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sidebar .tool-item:hover {
+            background: #eef2ff;
+            transform: translateX(2px);
+        }
+        .sidebar .tool-item .tool-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--primary);
+            margin-bottom: 2px;
+        }
+        .sidebar .tool-item .tool-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .sidebar .loading-tools {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
+        }
+        .sidebar .no-tools {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* 聊天区域 */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            line-height: 1.6;
+            font-size: 14px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background: var(--user-msg);
+            color: var(--user-text);
+            border-bottom-right-radius: 4px;
+        }
+        .message.assistant {
+            align-self: flex-start;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--shadow);
+        }
+        .message.assistant p { margin-bottom: 8px; }
+        .message.assistant p:last-child { margin-bottom: 0; }
+        .message.assistant ul, .message.assistant ol { margin: 8px 0; padding-left: 20px; }
+        .message.assistant code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: "JetBrains Mono", "Fira Code", monospace;
+        }
+        .message.assistant pre {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .message.system {
+            align-self: center;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            max-width: 100%;
+            padding: 4px 12px;
+        }
+
+        /* 工具调用卡片 */
+        .tool-card {
+            align-self: flex-start;
+            width: 100%;
+            max-width: 100%;
+            margin: 4px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            animation: fadeIn 0.3s ease;
+        }
+        .tool-card .tool-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .tool-card.tool-call {
+            background: var(--tool-bg);
+            border: 1px solid var(--tool-border);
+        }
+        .tool-card.tool-call .tool-header { background: var(--tool-border); color: #fff; }
+        .tool-card.tool-result {
+            background: var(--success-bg);
+            border: 1px solid var(--success-border);
+        }
+        .tool-card.tool-result .tool-header { background: var(--success-border); color: #fff; }
+        .tool-card.tool-error {
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+        }
+        .tool-card.tool-error .tool-header { background: var(--error-border); color: #fff; }
+        .tool-card .tool-body {
+            padding: 8px 12px;
+            font-size: 13px;
+            font-family: "JetBrains Mono", "Fira Code", monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* 输入区域 */
+        .input-area {
+            padding: 16px 24px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .input-area textarea {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            max-height: 120px;
+            transition: border-color 0.2s;
+        }
+        .input-area textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+        .input-area button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .input-area button:hover { background: var(--primary-hover); }
+        .input-area button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        /* 打字指示器 */
+        .typing {
+            align-self: flex-start;
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--shadow);
+        }
+        .typing span {
+            width: 8px;
+            height: 8px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* 清除按钮 */
+        .clear-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .clear-btn:hover {
+            background: var(--bg);
+        }
+
+        /* 滚动条 */
+        .messages::-webkit-scrollbar { width: 6px; }
+        .messages::-webkit-scrollbar-track { background: transparent; }
+        .messages::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .message { max-width: 90%; }
+            .messages { padding: 16px; }
+            .input-area { padding: 12px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🧠 MCP Web Chat — 智能问答</h1>
+    <span class="status" id="status">正在连接...</span>
+    <button class="clear-btn" onclick="clearSession()" style="color:white;border-color:rgba(255,255,255,0.3)">清除对话</button>
+</header>
+
+<div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <h2>🔧 可用工具</h2>
+        <div id="toolList">
+            <div class="loading-tools">正在加载工具列表...</div>
+        </div>
+    </aside>
+
+    <!-- 聊天区域 -->
+    <div class="chat-area">
+        <div class="messages" id="messages">
+            <div class="message system">👋 你好！我是智能助手，可以通过 MCP 工具帮助你完成任务。</div>
+            <div class="message system">在左侧查看可用工具，在下方输入你的问题开始对话。</div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="input" rows="1" placeholder="输入你的问题，例如「计算 123 + 456」或「现在几点？」..."
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+            <button id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // 状态管理
+    // ============================================================
+    const SESSION_ID = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    let isLoading = false;
+    let currentAssistantMsg = null; // 当前正在流式接收的 AI 消息元素
+
+    // ============================================================
+    // 初始化：加载工具列表
+    // ============================================================
+    async function loadTools() {
+        const toolListEl = document.getElementById('toolList');
+        try {
+            const resp = await fetch('/api/tools');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const tools = await resp.json();
+
+            if (!tools || tools.length === 0) {
+                toolListEl.innerHTML = '<div class="no-tools">⚠️ 没有可用的 MCP 工具</div>';
+                setStatus('无工具', 'error');
+                return;
+            }
+
+            toolListEl.innerHTML = '';
+            tools.forEach(tool => {
+                const item = document.createElement('div');
+                item.className = 'tool-item';
+                item.title = tool.schema ? JSON.stringify(tool.schema, null, 2) : '';
+                item.innerHTML = `
+                    <div class="tool-name">${escapeHtml(tool.name)}</div>
+                    <div class="tool-desc">${escapeHtml(tool.description || '无描述')}</div>
+                `;
+                item.onclick = () => insertToolExample(tool.name);
+                toolListEl.appendChild(item);
+            });
+
+            setStatus(`已连接 (${tools.length} 工具)`, 'connected');
+        } catch (err) {
+            toolListEl.innerHTML = `<div class="no-tools" style="color:#ef4444">❌ 加载失败: ${err.message}</div>`;
+            setStatus('连接失败', 'error');
+        }
+    }
+
+    function insertToolExample(toolName) {
+        const input = document.getElementById('input');
+        input.value = `使用「${toolName}」工具`;
+        input.focus();
+    }
+
+    function setStatus(text, type) {
+        const el = document.getElementById('status');
+        el.textContent = text;
+        el.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    // ============================================================
+    // 发送消息（SSE 流式接收）
+    // ============================================================
+    async function sendMessage() {
+        const input = document.getElementById('input');
+        const sendBtn = document.getElementById('sendBtn');
+        const text = input.value.trim();
+
+        if (!text || isLoading) return;
+
+        // 清空输入
+        input.value = '';
+        input.style.height = 'auto';
+
+        // 显示用户消息
+        addMessage(text, 'user');
+
+        // 显示打字指示器
+        showTyping();
+
+        isLoading = true;
+        sendBtn.disabled = true;
+
+        try {
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: SESSION_ID,
+                    message: text,
+                }),
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                removeTyping();
+                addMessage(`❌ 请求失败 (${resp.status}): ${errData.error || resp.statusText}`, 'system');
+                isLoading = false;
+                sendBtn.disabled = false;
+                return;
+            }
+
+            // 读取 SSE 流
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const event = JSON.parse(line.slice(6));
+                            handleEvent(event);
+                        } catch (e) {
+                            // 忽略解析错误
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            removeTyping();
+            addMessage(`❌ 网络错误: ${err.message}`, 'system');
+        }
+
+        isLoading = false;
+        sendBtn.disabled = false;
+    }
+
+    // ============================================================
+    // 处理 SSE 事件
+    // ============================================================
+    function handleEvent(event) {
+        switch (event.type) {
+            case 'text':
+                // 流式文本追加到当前 AI 消息
+                appendToAssistant(event.content);
+                break;
+
+            case 'tool_call':
+                addToolCall(event.toolName, event.toolArgs);
+                break;
+
+            case 'tool_result':
+                updateToolResult(event.toolName, event.content);
+                break;
+
+            case 'error':
+                removeTyping();
+                addMessage(`❌ ${event.content}`, 'system');
+                break;
+
+            case 'done':
+                removeTyping();
+                finalizeAssistant();
+                break;
+        }
+    }
+
+    // ============================================================
+    // UI 辅助函数
+    // ============================================================
+
+    function addMessage(content, role) {
+        const messages = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = `message ${role}`;
+
+        if (role === 'assistant') {
+            div.innerHTML = marked(content);
+            currentAssistantMsg = div;
+        } else if (role === 'user') {
+            div.textContent = content;
+        } else {
+            div.innerHTML = content;
+        }
+
+        messages.appendChild(div);
+        scrollToBottom();
+    }
+
+    function appendToAssistant(text) {
+        if (!currentAssistantMsg) {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message assistant';
+            div.innerHTML = '';
+            messages.appendChild(div);
+            currentAssistantMsg = div;
+        }
+        // 追加文本
+        const existing = currentAssistantMsg.innerHTML;
+        currentAssistantMsg.innerHTML = marked(existing + text);
+        scrollToBottom();
+    }
+
+    function finalizeAssistant() {
+        currentAssistantMsg = null;
+    }
+
+    function showTyping() {
+        removeTyping(); // 确保不重复
+        const messages = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'typing';
+        div.id = 'typingIndicator';
+        div.innerHTML = '<span></span><span></span><span></span>';
+        messages.appendChild(div);
+        scrollToBottom();
+    }
+
+    function removeTyping() {
+        const el = document.getElementById('typingIndicator');
+        if (el) el.remove();
+    }
+
+    function addToolCall(name, args) {
+        removeTyping();
+
+        const messages = document.getElementById('messages');
+        const div = document.createElement('div');
+        div.className = 'tool-card tool-call';
+        div.id = 'toolCard_' + name;
+        div.innerHTML = `
+            <div class="tool-header">🔧 调用工具: ${escapeHtml(name)}</div>
+            <div class="tool-body">${escapeHtml(JSON.stringify(args, null, 2))}</div>
+        `;
+        messages.appendChild(div);
+        scrollToBottom();
+    }
+
+    function updateToolResult(name, content) {
+        const existing = document.getElementById('toolCard_' + name);
+        if (existing) {
+            existing.className = 'tool-card tool-result';
+            existing.innerHTML = `
+                <div class="tool-header">✅ 工具返回: ${escapeHtml(name)}</div>
+                <div class="tool-body">${escapeHtml(content)}</div>
+            `;
+        } else {
+            // 没有 tool_call 事件就直接显示结果（比如从历史恢复）
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'tool-card tool-result';
+            div.innerHTML = `
+                <div class="tool-header">✅ 工具返回: ${escapeHtml(name)}</div>
+                <div class="tool-body">${escapeHtml(content)}</div>
+            `;
+            messages.appendChild(div);
+        }
+        scrollToBottom();
+    }
+
+    async function clearSession() {
+        await fetch(`/api/sessions/${SESSION_ID}`, { method: 'DELETE' });
+        document.getElementById('messages').innerHTML = `
+            <div class="message system">🗑️ 对话已清除，开始新对话吧！</div>
+        `;
+        currentAssistantMsg = null;
+    }
+
+    function scrollToBottom() {
+        const messages = document.getElementById('messages');
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    // ============================================================
+    // Markdown 简易渲染
+    // ============================================================
+    function marked(text) {
+        if (!text) return '';
+        return text
+            // 代码块 (必须放在行内代码前面处理)
+            .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+                return `<pre>${escapeHtml(code.trim())}</pre>`;
+            })
+            // 行内代码
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // 加粗
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // 斜体
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            // 无序列表
+            .replace(/^- (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+            // 有序列表
+            .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+            // 段落
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>')
+            .replace(/^(.+)$/, '<p>$1</p>')
+            // 清理多余的嵌套
+            .replace(/<p><\/p>/g, '')
+            .replace(/<br><\/p>/g, '</p>');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ============================================================
+    // 自动调整输入框高度
+    // ============================================================
+    document.getElementById('input').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // ============================================================
+    // 启动
+    // ============================================================
+    loadTools();
+</script>
+</body>
+</html>

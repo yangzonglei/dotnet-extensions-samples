@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Yzl.Extensions.Samples.OpenFeign.AOT</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Samples.Models\Samples.Models.csproj" />
+  </ItemGroup>
+
+  <!-- 开发模式：源码引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Core\Yzl.Extensions.Core.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign.AOT\Yzl.Extensions.Http.OpenFeign.AOT.csproj" />
+    <!-- 源码生成器作为 Analyzer 引用 -->
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign.AOT.SourceGenerator\Yzl.Extensions.Http.OpenFeign.AOT.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- 默认模式：NuGet 包引用 -->
+  <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
+    <PackageReference Include="Yzl.Extensions.Http.OpenFeign.AOT" />
+  </ItemGroup>
+
+  <!-- 两种模式都需要的 NuGet 包 -->
+  <ItemGroup>
+    <PackageReference Include="NLog.Web.AspNetCore" />
+  </ItemGroup>
+</Project>
