@@ -201,7 +201,7 @@ dotnet run --project src/Yzl.Extensions.Samples.Cache
 
 端口 **16606** — 演示 [Yzl.Extensions.SpringBoot.Admin.Client.Net](https://www.nuget.org/packages/Yzl.Extensions.SpringBoot.Admin.Client.Net) + Actuator 监控端点。
 
-**涉及 NuGet 包：** `Yzl.Extensions.SpringBoot.Admin.Client.Net`、`Yzl.Extensions.Common`、`NLog.Web.AspNetCore`
+**涉及 NuGet 包：** `Yzl.Extensions.SpringBoot.Admin.Client.Net`、`Yzl.Extensions.Core`、`NLog.Web.AspNetCore`
 
 **启动：**
 ```bash

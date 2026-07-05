@@ -21,6 +21,7 @@ Console.WriteLine("""
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+// ===== SpringBoot.Admin.Client.Net =====
 builder.Services.AddSpringBootAdminClient(builder.Configuration);
 
 var app = builder.Build();
