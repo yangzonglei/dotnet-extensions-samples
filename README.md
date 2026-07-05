@@ -315,14 +315,14 @@ dotnet run --project src/Yzl.Extensions.Samples.Mcp.Client -- [mcpUrl] [tokenEnd
 
 ## 端口汇总
 
-| 项目 | 端口 |
-|------|------|
-| Samples.Api | `16600` |
-| Actuator (预留) | `16601` |
-| OpenFeign (Client) | `16602` |
-| OpenFeign.AOT | `16603` |
-| OpenFeign.Net48 | `16604` |
-| Cache | `16605` |
+| 项目                   | 端口 |
+|----------------------|------|
+| Samples.Api          | `16600` |
+| Actuator             | `16601` |
+| OpenFeign (Proxy)    | `16602` |
+| OpenFeign.AOT        | `16603` |
+| OpenFeign.Net48      | `16604` |
+| Cache                | `16605` |
 | SpringBoot.Admin.Net | `16606` |
-| Mcp.Service | `16607` |
-| Mcp.WebClient | `16608` |
+| Mcp.Service          | `16607` |
+| Mcp.WebClient        | `16608` |
