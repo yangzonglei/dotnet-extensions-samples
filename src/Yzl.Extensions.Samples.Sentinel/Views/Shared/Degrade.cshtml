@@ -1,0 +1,25 @@
+@model Yzl.Extensions.Sentinel.Configuration.SentinelDegradePageModel
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>服务暂不可用</title>
+    <style>
+        body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; text-align: center; margin-top: 15%; color: #333; }
+        h1 { font-size: 28px; }
+        p { color: #999; }
+        a { color: #2f6fed; }
+    </style>
+</head>
+<body>
+    <h1>@Model.Message</h1>
+    <p>Sentinel 熔断降级保护已触发</p>
+    @if (!string.IsNullOrEmpty(Model.Resource))
+    {
+        <p style="font-size: 12px">资源：@Model.Resource</p>
+    }
+    <p style="font-size: 12px">触发时间：@Model.Time.ToString("yyyy-MM-dd HH:mm:ss")</p>
+    <p><a href="javascript:history.back()">← 返回上页</a>　<a href="javascript:location.reload()">刷新重试</a></p>
+</body>
+</html>

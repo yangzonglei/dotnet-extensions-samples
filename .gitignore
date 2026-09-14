@@ -35,3 +35,6 @@ publish/
 
 ## BenchmarkDotNet
 BenchmarkDotNet.Artifacts/
+
+## 压测报告
+reports/

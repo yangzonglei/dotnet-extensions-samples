@@ -1,0 +1,10 @@
+@{
+    ViewData["Title"] = "SentinelResource 特性演示";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>SentinelResource 特性演示</h1>
+    <p>本页已通过限流检查（资源 key <code>home:shared</code>，由 <code>[SentinelResource("home:shared")]</code> 手动覆盖，1 QPS）。当前时间：<strong>@ViewBag.Time</strong></p>
+    <p>不再用 URL <code>/Home/SharedResource</code> 当资源 key，而是统一归一到 <code>home:shared</code>；同一资源可被多个入口复用，共享同一套限流/熔断规则。</p>
+    <p>快速刷新本页（F5 连点）触发限流后，你会看到 <code>RateLimit.cshtml</code> 渲染的 429 页，URL 保持不变。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>

@@ -1,0 +1,183 @@
+@model Yzl.Extensions.Sentinel.Configuration.SentinelRateLimitPageModel
+
+@{
+Layout = null;
+var now = Model?.Time as DateTime? ?? DateTime.Now;
+var ip = Context.Connection.RemoteIpAddress?.ToString() ?? "-";
+var userId = Context.Request.Cookies[""];
+var currentUrl = Context.Request.Path + Context.Request.QueryString;
+var hasRetryAfter = Context.Response.Headers.TryGetValue("Retry-After", out var retryAfter);
+var retrySeconds = hasRetryAfter ? retryAfter.FirstOrDefault() : null;
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>访问太频繁了</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+            "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #eef2ff 0%, #f3f0ff 45%, #eef6ff 100%);
+            color: #1f2937;
+        }
+        .card {
+            width: 100%;
+            max-width: 560px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 12px 40px rgba(79, 70, 229, 0.12);
+            padding: 44px 40px 36px;
+            text-align: center;
+        }
+        .icon {
+            width: 88px;
+            height: 88px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+        }
+        .icon svg { width: 46px; height: 46px; fill: #fff; }
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.7;
+        }
+        .info-grid {
+            margin-top: 26px;
+            background: #f8fafc;
+            border: 1px solid #eef2f7;
+            border-radius: 14px;
+            padding: 8px 0;
+            text-align: left;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 11px 18px;
+            border-bottom: 1px solid #eef2f7;
+            font-size: 14px;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #6b7280; white-space: nowrap; }
+        .info-value {
+            font-weight: 600;
+            color: #1f2937;
+            word-break: break-all;
+            text-align: right;
+        }
+        .info-value.user-id {
+            color: #4f46e5;
+            font-variant-numeric: tabular-nums;
+        }
+        .info-value.time { font-variant-numeric: tabular-nums; }
+        .actions {
+            margin-top: 28px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 11px 26px;
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            color: #fff;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+        }
+        .btn-primary:hover { opacity: 0.92; transform: translateY(-1px); }
+        .btn-ghost {
+            color: #6b7280;
+            background: #f3f4f6;
+        }
+        .btn-ghost:hover { background: #e5e7eb; }
+        .retry-hint {
+            margin-top: 18px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+        .footer {
+            margin-top: 24px;
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="icon">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4.5c.83 0 1.5.67 1.5 1.5S12.83 8.5 12 8.5 10.5 7.83 10.5 7 11.17 5.5 12 5.5zm1.5 10h-3v-2h1v-2h-1v-2h3v6z"/>
+        </svg>
+    </div>
+    <h1>访问太频繁了</h1>
+    <p class="subtitle">系统检测到当前请求过于密集，已为您临时限流。<br />请稍作休息，很快就能继续浏览～</p>
+
+    <div class="info-grid">
+        <div class="info-row">
+            <span class="info-label">访问时间</span>
+            <span class="info-value time">@now.ToString("yyyy-MM-dd HH:mm:ss")</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">访问 IP</span>
+            <span class="info-value">@ip</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">用户 ID</span>
+            <span class="info-value user-id">@(string.IsNullOrEmpty(userId) ? "未登录" : userId)</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">当前页面</span>
+            <span class="info-value">@currentUrl</span>
+        </div>
+    </div>
+
+    <div class="actions">
+        <a class="btn btn-ghost" href="javascript:history.back()">返回上一页</a>
+        <a class="btn btn-primary" href="@currentUrl" onclick="this.disabled=true;this.textContent='正在刷新…';">刷新重试</a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(retrySeconds))
+    {
+    <p class="retry-hint">建议 @retrySeconds 秒后重试</p>
+    }
+    else
+    {
+    <p class="retry-hint">若持续出现此提示，请检查网络环境后再访问</p>
+    }
+
+    <p class="footer">© @now.Year XXX · 如有疑问请联系客服</p>
+</div>
+</body>
+</html>
+

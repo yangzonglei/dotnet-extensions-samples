@@ -1,0 +1,10 @@
+@{
+    ViewData["Title"] = "慢请求熔断演示";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>慢请求熔断演示</h1>
+    <p>本页故意耗时 300ms 执行（当前时间 <strong>@ViewBag.Time</strong>）。</p>
+    <p>用多标签页或并发工具同时访问本页（>5 个请求），当 1s 内慢请求比例 ≥ 50% 时熔断 10s：期间所有请求直接返回 429，不再进入本页。</p>
+    <p>恢复时间窗过后自动进入半开探测，成功请求会逐渐放行恢复。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>

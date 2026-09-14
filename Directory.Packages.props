@@ -11,6 +11,8 @@
         <PackageVersion Include="Yzl.Extensions.SpringBoot.Admin.Client.Net" Version="0.1.9"/>
         <PackageVersion Include="Yzl.Extensions.Common" Version="0.1.4"/>
         <PackageVersion Include="Yzl.Extensions.AI.Mcp" Version="0.1.0"/>
+        <PackageVersion Include="Yzl.Extensions.Sentinel" Version="0.1.0"/>
+        <PackageVersion Include="Yzl.Extensions.Sentinel.DataSource.Nacos" Version="0.1.0"/>
 
         <!-- 基础设施 -->
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1"/>
@@ -24,5 +26,9 @@
 
         <!-- MCP -->
         <PackageVersion Include="ModelContextProtocol.Core" Version="1.0.0"/>
+
+        <!-- Prometheus -->
+        <PackageVersion Include="prometheus-net" Version="8.2.1"/>
+        <PackageVersion Include="prometheus-net.AspNetCore" Version="8.2.1"/>
     </ItemGroup>
 </Project>

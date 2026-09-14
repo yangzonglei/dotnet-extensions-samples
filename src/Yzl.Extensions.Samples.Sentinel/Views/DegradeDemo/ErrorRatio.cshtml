@@ -1,0 +1,14 @@
+@{
+    ViewData["Title"] = "异常比例熔断演示";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>异常比例熔断演示</h1>
+    <p>熔断策略：<strong>@ViewBag.Mode</strong></p>
+    <p>规则：<code>@ViewBag.Rule</code>（资源 <code>degrade:error-ratio</code>，由 <code>[SentinelResource]</code> 手动覆盖）</p>
+    <p>当前请求已通过熔断检查（当前时间 <strong>@ViewBag.Time</strong>）。</p>
+    <p>@ViewBag.Tip</p>
+    <p>不带 <code>?fail=true</code> 访问本页为正常请求；带 <code>?fail=true</code> 抛异常（计入熔断 errorCount）。
+       用并发工具混合两种请求（5+ 个），异常比例 &gt; 50% 即熔断 10s。</p>
+    <p>熔断期间请求直接返回 429，或由 <code>Fallback</code> 返回降级提示页，不再进入本页。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>

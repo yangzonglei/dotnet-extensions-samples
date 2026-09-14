@@ -1,0 +1,54 @@
+@{
+    ViewData["Title"] = "Yzl.Extensions.Sentinel";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>Yzl.Extensions.Sentinel 限流/熔断演示</h1>
+    <p>对接 Java Sentinel 的 .NET 8 实现：滑动窗口限流 + 熔断器 + Dashboard 心跳 + 命令中心 + Nacos 数据源。</p>
+    <ul>
+        <li>
+            <strong><a href="/Home/RateLimitDemo">/Home/RateLimitDemo</a></strong>
+            — QPS 限流（2 QPS）。浏览器快速刷新，触发 429 后渲染 <code>Views/Shared/RateLimit.cshtml</code>。
+        </li>
+        <li>
+            <strong><a href="/Home/Slow">/Home/Slow</a></strong>
+            — 慢请求熔断（耗时 300ms）。并发多刷，慢请求比例 ≥ 50% 即熔断 10s。
+        </li>
+        <li>
+            <strong>熔断三种策略：</strong>
+            <a href="/DegradeDemo/SlowRatio">慢调用比例</a> /
+            <a href="/DegradeDemo/ErrorRatio">异常比例</a> /
+            <a href="/DegradeDemo/ErrorCount">异常数</a>
+            — 资源 key 由 <code>[SentinelResource]</code> 手动覆盖（<code>degrade:xxx</code>），?fail=true 制造异常。
+            熔断后返回降级页（<code>degradeViewName</code>）或 <code>Fallback</code> / <code>BlockHandler</code> 降级提示，不再显示异常页。
+        </li>
+        <li>
+            <strong><a href="/api/ratelimit">/api/ratelimit</a></strong>
+            — API 限流（1 QPS）。快速刷新返回 429 JSON。
+        </li>
+        <li>
+            <strong><a href="/Home/SharedResource">/Home/SharedResource</a></strong>
+            — SentinelResource 特性手动覆盖资源 key（<code>home:shared</code>，1 QPS）。共享一套规则。
+        </li>
+        <li>
+            <strong>限流全维度演示（页面版）：</strong>
+            <a href="/FlowDemo/QpsFastFail">QPS×直接×快速失败</a> /
+            <a href="/FlowDemo/QpsWarmUp">QPS×直接×预热</a> /
+            <a href="/FlowDemo/QpsQueueWait">QPS×直接×匀速排队</a> /
+            <a href="/FlowDemo/Related">关联</a>（A，关联 <a href="/FlowDemo/RelatedSource">B</a>） /
+            <a href="/FlowDemo/Chain">链路（退化）</a> /
+            <a href="/FlowDemo/Thread">线程数</a>
+            — 覆盖 阈值类型 × 流控模式 × 流控效果，资源 key 用 <code>[SentinelResource]</code> 短名（<code>flow:page:*</code>）。
+        </li>
+        <li>
+            <strong>限流全维度演示（API 版）：</strong>
+            <a href="/api/flow/qps-fast-fail">qps-fast-fail</a> /
+            <a href="/api/flow/qps-warmup">qps-warmup</a> /
+            <a href="/api/flow/qps-queue-wait">qps-queue-wait</a> /
+            <a href="/api/flow/related">related</a> /
+            <a href="/api/flow/chain">chain（退化）</a> /
+            <a href="/api/flow/thread">thread</a>
+            — 同维度 API 版（资源 key = 属性路由模板 <code>/api/flow/*</code>），被限流返回 429 JSON。
+        </li>
+    </ul>
+    <p style="color:#999">Dashboard 心跳：transport.dashboard = 127.0.0.1:8858（未启动时每 10s 记一条 warning 日志，可忽略）。</p>
+</div>

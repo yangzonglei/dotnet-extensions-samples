@@ -1,0 +1,12 @@
+@{
+    ViewData["Title"] = "线程数 × 直接 × 快速失败";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>限流演示：@ViewBag.Mode</h1>
+    <p>资源 key：<code>flow:page:thread</code>（由 <code>[SentinelResource]</code> 手动覆盖）</p>
+    <p>规则：<code>@ViewBag.Rule</code></p>
+    <p>当前请求已通过限流检查（动作持有 500ms，当前时间 <strong>@ViewBag.Time</strong>）。</p>
+    <p>@ViewBag.Tip</p>
+    <p>被限流时返回 429，渲染 <code>Views/Shared/RateLimit1.cshtml</code>（URL 不变，本页不再执行）。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>

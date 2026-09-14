@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Yzl.Extensions.Samples.Sentinel</RootNamespace>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+  </PropertyGroup>
+
+  <!-- 开发模式：源码引用（默认，指向本地 dotnet-extensions） -->
+  <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Sentinel\Yzl.Extensions.Sentinel.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Sentinel.DataSource.Nacos\Yzl.Extensions.Sentinel.DataSource.Nacos.csproj" />
+  </ItemGroup>
+
+  <!-- NuGet 包引用（包发布后默认模式） -->
+  <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
+    <PackageReference Include="Yzl.Extensions.Sentinel" />
+    <PackageReference Include="Yzl.Extensions.Sentinel.DataSource.Nacos" />
+  </ItemGroup>
+
+  <!-- Prometheus 生态集成（验证 ISentinelMetricsProvider → 标准 /metrics 出口） -->
+  <ItemGroup>
+    <PackageReference Include="prometheus-net" />
+    <PackageReference Include="prometheus-net.AspNetCore" />
+  </ItemGroup>
+</Project>

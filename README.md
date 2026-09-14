@@ -39,6 +39,7 @@ src/
 ├── Yzl.Extensions.Samples.SpringBoot.Admin.Net/# 16606 - Spring Boot Admin 客户端
 ├── Yzl.Extensions.Samples.Mcp.Service/         # 16607 - MCP 服务端
 ├── Yzl.Extensions.Samples.Mcp.WebClient/       # 16608 - MCP Web 聊天客户端
+├── Yzl.Extensions.Samples.Sentinel/            # 16609 - Sentinel 限流 / 熔断演示（对接 Java Sentinel Dashboard）
 ├── Yzl.Extensions.Samples.Mcp.Client/          # 无端口 - MCP 命令行客户端
 └── Samples.Models/                    # 无端口 - 共享模型
 ```
@@ -278,6 +279,103 @@ dotnet run --project src/Yzl.Extensions.Samples.Mcp.WebClient
 
 ---
 
+### Yzl.Extensions.Samples.Sentinel
+
+端口 **16609** — 演示 [Yzl.Extensions.Sentinel](https://github.com/yangzonglei/dotnet-extensions) 限流 / 熔断，可对接 Java Sentinel Dashboard。
+
+**涉及 NuGet 包：** `Yzl.Extensions.Sentinel`、`Yzl.Extensions.Sentinel.DataSource.Nacos`（尚未发布，默认源码引用）
+
+**启动：**
+```bash
+dotnet run --project src/Yzl.Extensions.Samples.Sentinel
+# 监听 http://localhost:16609
+```
+
+**演示端点：**
+| 路由 | 演示内容 |
+|------|---------|
+| `/Home/RateLimitDemo` | QPS 限流（资源 `/Home/RateLimitDemo`，2 QPS）→ 429 渲染 Razor View（URL 不变） |
+| `/Home/Slow` | 慢请求熔断（RT>300ms、慢比例 ≥50% 且 ≥5 请求即熔断 10s） |
+| `/Home/SharedResource` | `[SentinelResource("home:shared")]` 手动覆盖资源 key（1 QPS），共享一套规则 |
+| `/DegradeDemo/SlowRatio` | 慢调用比例熔断（`degrade:slow-ratio`，RT>300ms、慢比例 ≥50% 且 ≥5 请求熔断 10s） |
+| `/DegradeDemo/ErrorRatio?fail=true` | 异常比例熔断（`degrade:error-ratio`，异常比例 >50% 且 ≥5 请求熔断 10s）；抛异常 → `Fallback` 降级提示页 |
+| `/DegradeDemo/ErrorCount?fail=true` | 异常数熔断（`degrade:error-count`，异常数 >3 且 ≥5 请求熔断 10s）；熔断拦截 → `BlockHandler` 降级提示页 |
+| `/api/ratelimit` | API 限流（资源 `/api/ratelimit`，1 QPS）→ `jsonTemplate` 自定义 429 JSON |
+
+**限流（flow）全维度演示**（页面版 `FlowDemoController` + API 版 `FlowApiController`，覆盖 阈值类型 × 流控模式 × 流控效果）：
+
+| 路由 | 阈值类型 | 流控模式 | 流控效果 | 资源 key | 规则要点 |
+|------|---------|---------|---------|---------|---------|
+| `/FlowDemo/QpsFastFail` | QPS | 直接 | 快速失败 | `flow:page:qps-fast-fail` | count=2 |
+| `/FlowDemo/QpsWarmUp` | QPS | 直接 | 预热 | `flow:page:qps-warmup` | count=10, warmUpPeriodSec=10 |
+| `/FlowDemo/QpsQueueWait` | QPS | 直接 | 匀速排队 | `flow:page:qps-queue-wait` | count=1, maxQueueingTimeMs=5000 |
+| `/FlowDemo/Related`（A） | QPS | 关联 | 快速失败 | `flow:page:related` | refResource=`flow:page:related-source` |
+| `/FlowDemo/RelatedSource`（B） | QPS | 直接 | — | `flow:page:related-source` | count=100 占位（压流量源 B） |
+| `/FlowDemo/Chain` | QPS | 链路 ⚠️ | 快速失败 | `flow:page:chain` | strategy=2 **退化直连** |
+| `/FlowDemo/Thread` | 线程数 | 直接 | 快速失败 | `flow:page:thread` | count=2 并发（动作持有 500ms） |
+| `/api/flow/qps-fast-fail` | QPS | 直接 | 快速失败 | `/api/flow/qps-fast-fail` | count=2 |
+| `/api/flow/qps-warmup` | QPS | 直接 | 预热 | `/api/flow/qps-warmup` | count=10, warmUpPeriodSec=10 |
+| `/api/flow/qps-queue-wait` | QPS | 直接 | 匀速排队 | `/api/flow/qps-queue-wait` | count=1, maxQueueingTimeMs=5000 |
+| `/api/flow/related`（A） | QPS | 关联 | 快速失败 | `/api/flow/related` | refResource=`/api/flow/related-source` |
+| `/api/flow/related-source`（B） | QPS | 直接 | — | `/api/flow/related-source` | count=100 占位（压流量源 B） |
+| `/api/flow/chain` | QPS | 链路 ⚠️ | 快速失败 | `/api/flow/chain` | strategy=2 **退化直连** |
+| `/api/flow/thread` | 线程数 | 直接 | 快速失败 | `/api/flow/thread` | count=2 并发（动作持有 500ms） |
+
+> ⚠️ **链路（strategy=2）为退化实现**：.NET 中间件无 Java `SphU.entry` 嵌套入口链，`SentinelEngine` 不构建调用链，`FlowRuleChecker` 恒用当前资源自身节点检查（与直连等价）。规则仍配置 &amp; 加载（Validator 要求 `refResource` 非空即通过），此处**如实演示 + 标注退化**，不做库改动。
+>
+> 页面版被限流时渲染 `Views/Shared/RateLimit1.cshtml`（429，URL 不变）；API 版返回 429 JSON（`jsonTemplate`）。**规则需贴入 Nacos 才生效**（见下节）。
+
+**熔断降级（对标 Java `@SentinelResource` 的 blockHandler / fallback）：**
+- **业务抛异常**（如 `?fail=true`）→ 中间件统计熔断后调用动作上的 `Fallback` 静态方法（签名＝原参数＋可选末位 `Exception`），返回友好提示页，不再出现异常页
+- **熔断器打开被拦截**（DegradeException）→ 中间件先调用 `BlockHandler` 静态方法（末位带 `SentinelBlockException`），未配置则按 `sentinel.response.degradeViewName` 渲染降级页（`Views/Shared/Degrade.cshtml`），再回退 `degradeHtmlTemplate` / 内置默认降级模板
+- **限流 / 熔断 / 鉴权分页**：限流 → `RateLimit` 页；熔断/鉴权 → `Degrade` 页；API 控制器（`[ApiController]`）恒返回对应 429 JSON 模板
+
+**特性：**
+- 资源 key 用 URL（属性路由模板 / 请求路径，对标 Java `CommonFilter`），启动预注册全部 Controller 路由；可用 `[SentinelResource("xxx")]` 手动覆盖资源 key（优先级高于路由模板），实现多入口共享同一规则
+- `sentinel.filter.excludeUrlPatterns` 过滤首页 / favicon 等系统请求（不建节点、不入调用链路）
+- 每 10s 向 `sentinel:transport:dashboard`（默认 127.0.0.1:8858）上报心跳，Dashboard 可反向管理规则
+- 命令中心默认端口 `8719`：`/getRules`、`/setRules`、`/metric` 等命令
+- 429 响应定制：浏览器请求渲染 Razor View（限流 `viewName` / 降级 `degradeViewName`）、API 请求返回 `jsonTemplate` / `degradeJsonTemplate` 接口 JSON 模板
+- Nacos 数据源：配置 `sentinel.datasource.{name}.nacos` 从 Nacos 热更新规则，未配置回退 `sentinel.rules` 本地规则
+
+**限流规则配置（Nacos flow-config）：**
+
+> ⚠️ 本机 `appsettings.json` 已配置 `datasource.flow.nacos`（data-id `flow-config`、group `DEV`）——**运行时本地 `sentinel.rules` 会被忽略**（启动时告警，Nacos 为权威源）。`appsettings.json` 里的 `sentinel.rules.flow` 仅作**文档化回退**。要让上面 14 个新端点生效，把下面 JSON 数组**整段贴入 Nacos `flow-config`**（与现有 7 条规则合并即可）；贴入前新端点恒 200（无规则即放行）。
+
+```json
+[
+  { "resource": "flow:page:qps-fast-fail", "limitApp": "default", "grade": 1, "count": 2, "strategy": 0, "controlBehavior": 0 },
+  { "resource": "flow:page:qps-warmup", "limitApp": "default", "grade": 1, "count": 10, "strategy": 0, "controlBehavior": 1, "warmUpPeriodSec": 10 },
+  { "resource": "flow:page:qps-queue-wait", "limitApp": "default", "grade": 1, "count": 1, "strategy": 0, "controlBehavior": 2, "maxQueueingTimeMs": 5000 },
+  { "resource": "flow:page:related", "limitApp": "default", "grade": 1, "count": 1, "strategy": 1, "controlBehavior": 0, "refResource": "flow:page:related-source" },
+  { "resource": "flow:page:related-source", "limitApp": "default", "grade": 1, "count": 100, "strategy": 0, "controlBehavior": 0 },
+  { "resource": "flow:page:chain", "limitApp": "default", "grade": 1, "count": 2, "strategy": 2, "controlBehavior": 0, "refResource": "flow:page:chain" },
+  { "resource": "flow:page:thread", "limitApp": "default", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0 },
+  { "resource": "/api/flow/qps-fast-fail", "limitApp": "default", "grade": 1, "count": 2, "strategy": 0, "controlBehavior": 0 },
+  { "resource": "/api/flow/qps-warmup", "limitApp": "default", "grade": 1, "count": 10, "strategy": 0, "controlBehavior": 1, "warmUpPeriodSec": 10 },
+  { "resource": "/api/flow/qps-queue-wait", "limitApp": "default", "grade": 1, "count": 1, "strategy": 0, "controlBehavior": 2, "maxQueueingTimeMs": 5000 },
+  { "resource": "/api/flow/related", "limitApp": "default", "grade": 1, "count": 1, "strategy": 1, "controlBehavior": 0, "refResource": "/api/flow/related-source" },
+  { "resource": "/api/flow/related-source", "limitApp": "default", "grade": 1, "count": 100, "strategy": 0, "controlBehavior": 0 },
+  { "resource": "/api/flow/chain", "limitApp": "default", "grade": 1, "count": 2, "strategy": 2, "controlBehavior": 0, "refResource": "/api/flow/chain" },
+  { "resource": "/api/flow/thread", "limitApp": "default", "grade": 0, "count": 2, "strategy": 0, "controlBehavior": 0 }
+]
+```
+
+**各组合触发方式（贴入 Nacos 后）：**
+
+| 演示 | 触发 |
+|------|------|
+| QPS × 直接 × 快速失败 | 浏览器 F5 连刷超过 count=2 QPS → 429 |
+| QPS × 直接 × 预热 | 应用空闲 3~5s 后持续刷新：阈值从约 count/3 爬升到 count（预热因子 `sentinel.flow.cold-factor`=3），超过当前可放行速率即 429 |
+| QPS × 直接 × 匀速排队 | 并发连刷：请求被引擎内 `Task.Delay` 匀速排开（约每秒 1 个），观察时间戳间距；预计等待超过 maxQueueingTimeMs=5000 的尾部请求才 429 |
+| 关联（A=related, B=related-source） | 并发刷 B → A 被限（429），B 本身不限 |
+| 链路（退化直连） | 快速刷新超过 count=2 QPS → 429（语义与直接等价） |
+| 线程数 × 直接 × 快速失败 | 并发同时发 3+ 个请求（动作持有 500ms），并发在途 > count=2 时第 3 个请求 429 |
+
+可选：临时注释 `appsettings.json` 的 `datasource` 节点 → 重启后回退本地 `sentinel.rules.flow` 生效（本地验证用，非必需）。
+
+---
+
 ### Samples.Models
 
 共享数据模型，被其他示例项目引用。包含：
@@ -326,3 +424,4 @@ dotnet run --project src/Yzl.Extensions.Samples.Mcp.Client -- [mcpUrl] [tokenEnd
 | SpringBoot.Admin.Net | `16606` |
 | Mcp.Service          | `16607` |
 | Mcp.WebClient        | `16608` |
+| Sentinel             | `16609` |

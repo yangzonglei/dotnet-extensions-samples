@@ -1,0 +1,12 @@
+@{
+    ViewData["Title"] = "相关资源（B，关联演示的流量源）";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>限流演示：@ViewBag.Mode</h1>
+    <p>资源 key：<code>flow:page:related-source</code>（由 <code>[SentinelResource]</code> 手动覆盖）</p>
+    <p>规则：<code>@ViewBag.Rule</code></p>
+    <p>当前请求已通过限流检查（当前时间 <strong>@ViewBag.Time</strong>）。</p>
+    <p>@ViewBag.Tip</p>
+    <p>本页是「关联」演示的流量源 B：本身不受限，压 B 会让 A（/FlowDemo/Related）被关联限流。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>

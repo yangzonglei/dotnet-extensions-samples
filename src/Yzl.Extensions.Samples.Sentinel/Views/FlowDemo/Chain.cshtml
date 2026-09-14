@@ -1,0 +1,12 @@
+@{
+    ViewData["Title"] = "QPS × 链路（退化直连）";
+}
+<div style="font-family: sans-serif; max-width: 640px; margin: 40px auto; line-height: 1.7">
+    <h1>限流演示：@ViewBag.Mode</h1>
+    <p>资源 key：<code>flow:page:chain</code>（由 <code>[SentinelResource]</code> 手动覆盖）</p>
+    <p>规则：<code>@ViewBag.Rule</code></p>
+    <p>当前请求已通过限流检查（当前时间 <strong>@ViewBag.Time</strong>）。</p>
+    <p>@ViewBag.Tip</p>
+    <p>⚠️ 链路（strategy=2）为<strong>退化实现</strong>：规则已配置并加载、语义退化为直连（refResource 仅用于通过校验）。被限流时返回 429，渲染 <code>Views/Shared/RateLimit1.cshtml</code>。</p>
+    <p><a href="/">← 返回首页</a></p>
+</div>
