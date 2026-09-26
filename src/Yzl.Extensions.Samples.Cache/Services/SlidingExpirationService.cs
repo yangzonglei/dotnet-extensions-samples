@@ -34,6 +34,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 ///   - 用户Token：每次请求自动延长有效期
 ///   - 热点数据：访问越频繁，缓存越持久
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class SlidingExpirationService
 {
     // ===================================================================

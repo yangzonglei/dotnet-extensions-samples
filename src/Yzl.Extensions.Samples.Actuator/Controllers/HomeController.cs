@@ -21,19 +21,23 @@ public class HomeController : ControllerBase
             endpoints = new[]
             {
                 new { path = "/actuator", method = "GET", desc = "Actuator 根端点 — 列出所有可用端点的 HAL 链接" },
-                new { path = "/actuator/health", method = "GET", desc = "健康检查 — 包含 Ping、磁盘空间、自定义检查" },
+                new { path = "/actuator/health", method = "GET", desc = "健康检查 — 包含 ping、diskSpace、customHealth、db、redis 多个 contributor" },
                 new { path = "/actuator/info", method = "GET", desc = "应用信息 — 包含构建信息、环境信息、自定义信息" },
                 new { path = "/actuator/metrics", method = "GET", desc = "指标列表 — CPU、内存、线程、GC 等" },
                 new { path = "/actuator/metrics/{name}", method = "GET", desc = "指定指标的详细信息" },
                 new { path = "/actuator/env", method = "GET", desc = "环境配置属性" },
-                new { path = "/actuator/loggers", method = "GET", desc = "日志级别列表" },
+                new { path = "/actuator/loggers", method = "GET", desc = "日志级别列表（由 NLogLoggerManagement 提供，需 nlog.config）" },
                 new { path = "/actuator/loggers/{name}", method = "POST", desc = "运行时修改指定 Logger 的日志级别" },
                 new { path = "/actuator/beans", method = "GET", desc = "DI 容器中注册的所有 Bean（服务）" },
-                new { path = "/actuator/caches", method = "GET", desc = "缓存管理器列表" },
+                new { path = "/actuator/caches", method = "GET", desc = "缓存管理器列表 — 先调 /api/cache/add 写入即可看到条目" },
+                new { path = "/actuator/caches", method = "DELETE", desc = "清空所有缓存" },
+                new { path = "/actuator/caches/{cache}", method = "DELETE", desc = "删除指定缓存" },
+                new { path = "/api/cache/add", method = "GET", desc = "业务侧写入 IMemoryCache，用于演示与 /actuator/caches 的联动" },
                 new { path = "/actuator/mappings", method = "GET", desc = "当前应用的所有路由映射" },
                 new { path = "/actuator/conditions", method = "GET", desc = "条件评估报告" },
                 new { path = "/actuator/metadata", method = "GET", desc = "应用元数据" },
                 new { path = "/actuator/httptrace", method = "GET", desc = "HTTP 请求追踪记录" },
+                new { path = "/actuator/custom", method = "GET", desc = "自定义 IActuatorEndpoint 端点" },
             }
         });
     }

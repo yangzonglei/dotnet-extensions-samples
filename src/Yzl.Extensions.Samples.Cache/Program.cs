@@ -29,16 +29,17 @@ var builder = WebApplication.CreateBuilder(args);
 // 生命周期建议使用 Transient 或 Scoped：
 //   - Transient：每次请求创建新实例，代理自动包装
 //   - Singleton：需确保代理的单例性，通常由 AddEnableCaching 内部处理
+//
+// ── 使用 [IocService] + AddBatchServices() 自动扫描注册 ──
+// 每个服务类都标注了 [IocService(lifetime: ServiceLifetime.Transient)]，
+// AddBatchServices() 会扫描 App.Assemblies（当前解决方案中的项目程序集），
+// 把带 [IocService] 特性的类按其 Order 顺序注册进 DI 容器。
+//
+// 相比逐个手写 AddTransient<T>()，这种方式新增服务时无需改动 Program.cs。
+// 也可以显式指定程序集：AddBatchServices(typeof(BasicCacheService).Assembly)
+// 或指定程序集名：AddBatchServices("Yzl.Extensions.Samples.Cache")
 // ===================================================================
-builder.Services.AddTransient<BasicCacheService>();
-builder.Services.AddTransient<CacheLifecycleService>();
-builder.Services.AddTransient<SpelKeyService>();
-builder.Services.AddTransient<ConditionalService>();
-builder.Services.AddTransient<ConfigInheritanceService>();
-builder.Services.AddTransient<AsyncCacheService>();
-builder.Services.AddTransient<SlidingExpirationService>();
-builder.Services.AddTransient<RedisCacheService>();
-builder.Services.AddTransient<CacheEvictAllService>();
+builder.Services.AddBatchServices();
 
 // ===================================================================
 // 注册缓存框架（核心步骤，必须在服务注册之后）

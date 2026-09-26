@@ -1,0 +1,172 @@
+@host = http://localhost:16607
+@clientId = mcp-client
+@clientSecret = mcp-secret
+
+### ═══════════════════════════════════════════════════════════════
+###  Yzl.Extensions.Samples.Mcp.Service — 手工测试集合
+###
+###  前置条件：
+###    1. 启动 MCP 服务端：
+###       dotnet run --project src/Yzl.Extensions.Samples.Mcp.Service
+###       （监听 16607）
+###    2. /feign-test 需要同时启动 Samples.Api（16600）：
+###       dotnet run --project src/Samples.Api
+###
+###  说明：
+###    /mcp 端点开启了 JWT Bearer 认证，因此每个请求都要带 Authorization 头。
+###    下面的「获取 Token」请求执行后，VS Code REST Client 会把响应中的
+###    accessToken 自动写入 {{token}} 变量（见该请求的 @name / 响应处理说明）。
+###    若使用其他客户端，请手工复制 accessToken 到下面的 @token 中。
+### ═══════════════════════════════════════════════════════════════
+
+### ── 0. 服务根路径（无需认证）──
+GET {{host}}/
+
+### ── 1. 获取 JWT Token ──
+# 校验失败会返回 401；成功返回 { accessToken, tokenType, expiresIn }
+# VS Code REST Client 用户：把下面响应的 accessToken 复制到 @token 即可。
+POST {{host}}/api/auth/token
+Content-Type: application/json
+
+{
+    "clientId": "{{clientId}}",
+    "clientSecret": "{{clientSecret}}"
+}
+
+### ── 2. 未认证访问 /mcp（应返回 401）──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+}
+
+### ═══════════════════════════════════════════════════════════════
+###  以下请求均需认证。请把第 1 步拿到的 accessToken 粘贴到 @token。
+### ═══════════════════════════════════════════════════════════════
+@token = 在此粘贴 accessToken
+
+### ── 3. 获取工具列表 ──
+# 返回 calculator 的 add / subtract / echo、get_current_time、days_until、
+# is_weekend、age、GetById、GetByIdAsync 等工具。
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list"
+}
+
+### ── 4. 调用 add 工具（3 + 5 = 8）──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+        "name": "add",
+        "arguments": {
+            "a": 3,
+            "b": 5
+        }
+    }
+}
+
+### ── 5. 调用 subtract 工具（10 - 4 = 6）──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+        "name": "subtract",
+        "arguments": {
+            "a": 10,
+            "b": 4
+        }
+    }
+}
+
+### ── 6. 调用 echo 工具（重复 3 次）──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+        "name": "echo",
+        "arguments": {
+            "message": "hello",
+            "count": 3
+        }
+    }
+}
+
+### ── 7. 获取当前时间 ──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "tools/call",
+    "params": {
+        "name": "get_current_time"
+    }
+}
+
+### ── 8. 计算天数 ──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+        "name": "days_until",
+        "arguments": {
+            "target": "2026-12-25T00:00:00"
+        }
+    }
+}
+
+### ── 9. 调用未知工具（应返回 isError: true）──
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 8,
+    "method": "tools/call",
+    "params": {
+        "name": "nonexistent"
+    }
+}
+
+### ── 10. OpenFeign 调用 Samples.Api（需先启动 Samples.Api @16600）──
+GET {{host}}/feign-test

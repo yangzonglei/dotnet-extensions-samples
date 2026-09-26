@@ -26,6 +26,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ╚══════════════════════════════════════════════════════════════════╝
 /// </summary>
 [CacheConfig(defaultCacheName: "config-demo", defaultTtlSeconds: 120, defaultCacheType: CacheType.Memory)]
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class ConfigInheritanceService
 {
     // ===================================================================

@@ -16,6 +16,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 ///   - 自定义 TTL 过期时间
 ///   - 多种数据模型的缓存
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class BasicCacheService
 {
     // ===================================================================

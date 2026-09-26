@@ -22,6 +22,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║       （用于更新操作，保证缓存与数据源同步）                ║
 /// ╚══════════════════════════════════════════════════════════════╝
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class CacheLifecycleService
 {
     // ===================================================================

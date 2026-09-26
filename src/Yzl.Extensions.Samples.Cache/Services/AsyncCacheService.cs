@@ -25,6 +25,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║     - Task<List<T>> → 缓存 List<T>                        ║
 /// ╚══════════════════════════════════════════════════════════════╝
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class AsyncCacheService
 {
     // ===================================================================

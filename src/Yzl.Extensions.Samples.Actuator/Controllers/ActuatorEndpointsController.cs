@@ -19,9 +19,7 @@ public class ActuatorEndpointsController(IHttpClientFactory httpClientFactory, I
     private HttpClient CreateClient()
     {
         var client = httpClientFactory.CreateClient();
-        // 从配置或默认值获取本机地址
-        var baseUrl = configuration.GetValue<string>("ActuatorTest:BaseUrl") ?? "http://localhost:16601";
-        client.BaseAddress = new Uri(baseUrl);
+        client.BaseAddress = new Uri(ResolveActuatorBaseUrl(configuration));
         return client;
     }
 
@@ -166,5 +164,32 @@ public class ActuatorEndpointsController(IHttpClientFactory httpClientFactory, I
         var client = CreateClient();
         var result = await client.GetFromJsonAsync<object>("/actuator");
         return Ok(new { actuatorEndpoint = "/actuator", data = result });
+    }
+
+    /// <summary>
+    /// 解析 Actuator 的基础地址。
+    ///
+    /// <para>
+    /// 优先级：
+    /// <list type="number">
+    ///   <item><description>显式配置 <c>ActuatorTest:BaseUrl</c>（最高优先级，便于指向远程实例）。</description></item>
+    ///   <item><description>配置了 <c>management:server:port</c> 时，指向独立管理端口
+    ///     <c>http://localhost:{port}</c>——此模式下业务端口不再暴露 /actuator。</description></item>
+    ///   <item><description>否则回落到业务端口 <c>http://localhost:16601</c>（默认复用端口模式）。</description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    internal static string ResolveActuatorBaseUrl(IConfiguration configuration)
+    {
+        var configured = configuration.GetValue<string>("ActuatorTest:BaseUrl");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        var managementPort = configuration.GetValue<int?>("management:server:port");
+        return managementPort is > 0
+            ? $"http://localhost:{managementPort}"
+            : "http://localhost:16601";
     }
 }

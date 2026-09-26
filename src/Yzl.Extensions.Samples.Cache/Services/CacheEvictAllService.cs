@@ -28,6 +28,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 ///   - 数据结构变更后重建缓存
 ///   - 管理员手动刷新缓存操作
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class CacheEvictAllService
 {
     // ===================================================================

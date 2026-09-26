@@ -12,6 +12,8 @@
   <!-- 默认模式：NuGet 包引用 -->
   <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
     <PackageReference Include="Yzl.Extensions.Cache" />
+    <!-- [IocService] / AddBatchServices() 来自 Core 包（Cache 包已传递引用，此处显式声明以表意清晰） -->
+    <PackageReference Include="Yzl.Extensions.Core" />
   </ItemGroup>
 
   <!-- 公共测试面板 -->

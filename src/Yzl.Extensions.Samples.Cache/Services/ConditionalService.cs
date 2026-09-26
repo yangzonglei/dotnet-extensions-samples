@@ -25,6 +25,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║  两者可以组合使用，先评估 Condition，再评估 Unless             ║
 /// ╚══════════════════════════════════════════════════════════════════╝
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class ConditionalService
 {
     // ===================================================================

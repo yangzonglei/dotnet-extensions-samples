@@ -19,14 +19,14 @@ public class ActuatorDemoController : ControllerBase
     {
         return Ok(new
         {
-            message = "访问 /actuator/health 查看 customHealth 组件状态",
-            description = "CustomHealthContributor 演示如何自定义健康检查组件",
+            message = "访问 /actuator/health 查看 customHealth / db / redis 组件状态",
+            description = "三个 IHealthContributor 会被 AddSpringNetActuator 自动扫描注册，并列出现在 health details 中",
             status = "UP — 所有自定义检查通过",
-            checks = new[]
+            contributors = new[]
             {
-                new { name = "database", status = "UP", detail = "数据库连接正常 (模拟)" },
-                new { name = "redis", status = "UP", detail = "Redis 连接正常 (模拟)" },
-                new { name = "external-api", status = "UP", detail = "外部 API 可达 (模拟)" }
+                new { name = "customHealth", file = "CustomHealthContributor.cs", detail = "使用 HealthComponents.Up(...) 携带多项明细" },
+                new { name = "db", file = "DatabaseHealthContributor.cs", detail = "HealthComponents.Up(...) + Stopwatch 耗时统计" },
+                new { name = "redis", file = "RedisHealthContributor.cs", detail = "成功 Up() / 异常 Down(ex) 的标准写法" }
             }
         });
     }

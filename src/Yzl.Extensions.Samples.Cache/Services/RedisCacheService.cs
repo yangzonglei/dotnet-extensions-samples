@@ -31,6 +31,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 ///   2. 在 Program.cs 中调用 AddEnableCaching(enableRedis: true, ...)
 ///   3. 在 [Cacheable] 上设置 cacheType: CacheType.Redis
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class RedisCacheService
 {
     // ===================================================================

@@ -20,6 +20,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║  值1:值2          → 组合多个值形成复合键                  ║
 /// ╚══════════════════════════════════════════════════════════════╝
 /// </summary>
+[IocService(lifetime: ServiceLifetime.Transient)]
 public class SpelKeyService
 {
     // ===================================================================

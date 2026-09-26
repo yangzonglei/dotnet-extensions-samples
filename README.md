@@ -31,12 +31,12 @@ dotnet build eng/build.proj -p:UseProjectReference=true
 ```
 src/
 ├── Samples.Api/                                # 16600 - OpenFeign 后端 API（所有需要服务端接口的测试 API 项目）
-├── Yzl.Extensions.Samples.Actuator/            # 16601 - Actuator 端点演示（健康检查 / 指标 / 环境 / 日志管理 / 缓存 / Bean）
+├── Yzl.Extensions.Samples.Actuator/            # 16601 (+26601) - Actuator 端点演示（健康检查 / 指标 / 环境 / 日志管理 / 缓存 / Bean）
 ├── Yzl.Extensions.Samples.OpenFeign/           # 16602 - OpenFeign Runtime-proxy 客户端
 ├── Yzl.Extensions.Samples.OpenFeign.AOT/       # 16603 - OpenFeign AOT 客户端
 ├── Yzl.Extensions.Samples.OpenFeign.Net48/     # 16604 - OpenFeign .NET 4.8 客户端
 ├── Yzl.Extensions.Samples.Cache/               # 16605 - 缓存框架演示
-├── Yzl.Extensions.Samples.SpringBoot.Admin.Net/# 16606 - Spring Boot Admin 客户端
+├── Yzl.Extensions.Samples.SpringBoot.Admin.Net/# 16606 (+26606) - Spring Boot Admin 客户端
 ├── Yzl.Extensions.Samples.Mcp.Service/         # 16607 - MCP 服务端
 ├── Yzl.Extensions.Samples.Mcp.WebClient/       # 16608 - MCP Web 聊天客户端
 ├── Yzl.Extensions.Samples.Sentinel/            # 16609 - Sentinel 限流 / 熔断演示（对接 Java Sentinel Dashboard）
@@ -75,13 +75,21 @@ dotnet run --project src/Samples.Api
 
 ### Yzl.Extensions.Samples.Actuator
 
-端口 **16601** — 演示 [Yzl.Extensions.Actuator](https://github.com/yangzonglei/dotnet-extensions) 的 Actuator 端点能力。
+端口 **16601**（业务）+ **26601**（独立管理端口）— 演示 [Yzl.Extensions.Actuator](https://github.com/yangzonglei/dotnet-extensions) 的 Actuator 端点能力。
 
 **启动：**
 ```bash
+# 共享端口模式（默认）：/actuator/* 挂在业务端口 16601
 dotnet run --project src/Yzl.Extensions.Samples.Actuator
-# 监听 http://localhost:16601
+
+# 独立管理端口模式：/actuator/* 只监听 26601，业务端口不再暴露
+dotnet run --project src/Yzl.Extensions.Samples.Actuator --management:server:port=26601
 ```
+
+> 端口模式由配置项 `management:server:port` 决定：
+> 未配置时复用业务端口（需显式调用 `UseSpringNetActuatorMapEndpoints()`）；
+> 已配置时 `AddSpringNetActuator` 会自动拉起独立 Kestrel，业务端口上 `/actuator/*` 返回 `404`。
+> 也可在 VS / VS Code 中选择启动配置 **`Yzl.Extensions.Samples.Actuator (独立管理端口)`**。
 
 **功能：**
 | 端点 | 说明 |
@@ -94,19 +102,38 @@ dotnet run --project src/Yzl.Extensions.Samples.Actuator
 | `/actuator/env` | 环境配置属性 |
 | `/actuator/loggers` | 日志级别查看与运行时修改 |
 | `/actuator/beans` | DI 容器中注册的所有服务 |
-| `/actuator/caches` | 缓存管理（查看 / 清理） |
+| `/actuator/caches` | 缓存管理 — 查看全部缓存 |
+| `/actuator/caches/{cache}` | 单个缓存详情；`DELETE` 清空该缓存 |
 | `/actuator/mappings` | 路由映射 |
 | `/actuator/conditions` | 条件评估报告 |
 | `/actuator/metadata` | 应用元数据 |
 | `/actuator/httptrace` | HTTP 请求追踪记录 |
+| `/actuator/custom` | 自定义端点（`IActuatorEndpoint`） |
 
 **自定义扩展：**
-- `CustomHealthContributor` — 自定义健康检查（数据库 / Redis / 外部 API 模拟）
+- `CustomHealthContributor` — 自定义健康检查（`HealthComponents.Up(...)` 多项明细）
+- `DatabaseHealthContributor` — 数据库健康检查（`HealthComponents.Up(...)` + `Stopwatch` 耗时统计）
+- `RedisHealthContributor` — Redis 健康检查（成功 `Up()` / 异常 `Down(ex)`）
 - `CustomInfoContributor` — 自定义信息片段（团队 / 版本 / 功能列表）
 - `CustomActuatorEndpoint` — 自定义端点 `/actuator/custom`
 
+> 三个 `IHealthContributor` 由 `AddSpringNetActuator` 内部 `TryRegisterImplementations<IHealthContributor>()`
+> 自动扫描注册，无需手动 `AddSingleton`，会并列出现在 `/actuator/health` 的 `details` 中。
+
+**业务侧缓存联动：**
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/cache/add?name=demo` | 向 `IMemoryCache` 写入条目 |
+| `GET /api/cache/get?name=demo` | 读取条目（验证是否命中） |
+| `GET /api/cache/remove?name=demo` | 移除条目 |
+| `GET /api/actuator-test/{health,info,caches,...}` | 代理 Controller，转发到 Actuator（独立端口模式下自动跟随到 26601） |
+
 **测试面板：**
 访问 [/dashboard](http://localhost:16601/dashboard) 在可视界面中测试所有 Actuator 端点（通过代理 Controller 自动发现）。
+
+**测试手册：** [src/Yzl.Extensions.Samples.Actuator/docs/AUTOMATED_TEST.md](src/Yzl.Extensions.Samples.Actuator/docs/AUTOMATED_TEST.md)
+— 两种端口模式的完整 curl 用例、一键 `test.sh`、VS Code `.http` 集合。
 
 ---
 
@@ -137,6 +164,9 @@ dotnet run --project src/Yzl.Extensions.Samples.OpenFeign
 | SSE 流式 | `[Sse]` + `IAsyncEnumerable` / `ISseStream` |
 | 文件下载 | `Stream` / `byte[]` 返回类型 |
 | 请求头注入 | `IFeignRequestHeaderProvider` 全局注入 |
+
+**测试手册：** [src/Yzl.Extensions.Samples.OpenFeign/docs/TestManual.md](src/Yzl.Extensions.Samples.OpenFeign/docs/TestManual.md)
+— 覆盖后端 API、`ITestApiFeignClient` 接口定义、8 个端到端用例与关键断言。
 
 ---
 
@@ -196,6 +226,14 @@ dotnet run --project src/Yzl.Extensions.Samples.Cache
 | 滑动过期策略 | `Services/SlidingExpirationService.cs` |
 | Redis 后端缓存 | `Services/RedisCacheService.cs` |
 
+> 服务通过 `[IocService]` 特性 + `AddBatchServices()` 批量扫描注册（而非逐个手写 `AddTransient<T>()`）。
+> 缓存注解依赖 Castle DynamicProxy，**被注解的方法必须是 `virtual`**。
+> Redis 是否启用由配置项 `redis:main-site` 决定（未配置时仅内存缓存，第八章端点不可用）。
+
+**测试手册：** [src/Yzl.Extensions.Samples.Cache/docs/TestManual.md](src/Yzl.Extensions.Samples.Cache/docs/TestManual.md)
+— 九章 curl 用例、`elapsedMs` 判定标准、一键 `test.sh`、以及已知行为限制
+（`allEntries` 在内存提供器上为空操作、`callCount` 受 Transient 生命周期影响）。
+
 ---
 
 ### Yzl.Extensions.Samples.SpringBoot.Admin.Net
@@ -215,6 +253,11 @@ dotnet run --project src/Yzl.Extensions.Samples.SpringBoot.Admin.Net
 - Actuator 端点：`/actuator/health`、`/actuator/info`、`/actuator/metrics`、`/actuator/loggers`、`/actuator/beans`
 - HTTP Trace 中间件（`/actuator/httptrace`）
 - NLog 运行时日志级别动态调整
+
+**自动化测试：** [src/Yzl.Extensions.Samples.SpringBoot.Admin.Net/test.sh](src/Yzl.Extensions.Samples.SpringBoot.Admin.Net/test.sh)
+— 一键验证注册 / 心跳 / 反注册端到端流程，以及 `[ConfigurationProperties]` 配置绑定
+（`management:server`、`management:endpoints:web`、`spring:application`、`spring:boot:admin:client`）。
+**无需 SBA Server 亦可运行**：绑定断言走客户端日志，Server 在线时注册/反注册会真实发生。
 
 ---
 
@@ -243,6 +286,13 @@ dotnet run --project src/Yzl.Extensions.Samples.Mcp.Service
 | `is_weekend` | 判断日期是否为周末 |
 | `age` | 获取年龄问候语 |
 | `GetById` / `GetByIdAsync` | 通过 OpenFeign 调用外部 API 获取用户数据 |
+
+**手工测试集合：** [src/Yzl.Extensions.Samples.Mcp.Service/Yzl.Extensions.Samples.Mcp.Service.http](src/Yzl.Extensions.Samples.Mcp.Service/Yzl.Extensions.Samples.Mcp.Service.http)
+— 10 个请求：获取 JWT Token → 未认证 401 → `tools/list` → 逐个 `tools/call` → `/feign-test`。
+
+> `/mcp` 端点开启了 JWT Bearer 认证，**每个请求都必须带 `Authorization: Bearer <token>`**；
+> 且 MCP 返回 SSE 流，请求头需带 `Accept: application/json, text/event-stream`，
+> 否则会得到 `406 Not Acceptable`。
 
 ---
 
@@ -417,11 +467,13 @@ dotnet run --project src/Yzl.Extensions.Samples.Mcp.Client -- [mcpUrl] [tokenEnd
 |----------------------|------|
 | Samples.Api          | `16600` |
 | Actuator             | `16601` |
+| Actuator (管理端口)   | `26601` |
 | OpenFeign (Proxy)    | `16602` |
 | OpenFeign.AOT        | `16603` |
 | OpenFeign.Net48      | `16604` |
 | Cache                | `16605` |
 | SpringBoot.Admin.Net | `16606` |
+| SpringBoot.Admin.Net (管理端口) | `26606` |
 | Mcp.Service          | `16607` |
 | Mcp.WebClient        | `16608` |
 | Sentinel             | `16609` |

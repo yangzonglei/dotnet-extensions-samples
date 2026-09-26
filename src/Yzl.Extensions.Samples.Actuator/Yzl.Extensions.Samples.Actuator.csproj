@@ -19,4 +19,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Yzl.Extensions.Samples.TestDashboard\Yzl.Extensions.Samples.TestDashboard.csproj" />
   </ItemGroup>
+
+  <!--
+    NLog：/actuator/loggers 端点由 NLogLoggerManagement 提供，
+    它在找不到 NLog 配置时会抛 InvalidOperationException("No NLog configuration found.")。
+    因此本示例接入 NLog（nlog.config 由 NLog.Web.AspNetCore 自动复制到输出目录），
+    使 /actuator/loggers 的查询与运行时改级别真正可用。
+  -->
+  <ItemGroup>
+    <PackageReference Include="NLog.Web.AspNetCore" />
+  </ItemGroup>
 </Project>
