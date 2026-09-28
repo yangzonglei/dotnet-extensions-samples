@@ -5,14 +5,14 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// <summary>
 /// 【异步缓存 —— async/await 方法支持】
 ///
-/// 框架完全支持异步方法（async Task<T>）的缓存。
-/// 与同步方法的使用方式完全一致，框架会自动处理 Task 的等待和结果提取。
+/// 框架完全支持异步方法的缓存：Task&lt;T&gt; 与 ValueTask&lt;T&gt; 均可，
+/// 与同步方法的使用方式完全一致，框架会自动处理异步返回值的等待与结果提取。
 ///
 /// ╔══════════════════════════════════════════════════════════════╗
 /// ║  异步缓存注意事项：                                        ║
 /// ║                                                            ║
 /// ║  1. async 方法的缓存行为与同步方法完全一致                 ║
-/// ║     - 缓存命中时跳过方法执行，直接返回 Task<T>             ║
+/// ║     - 缓存命中时跳过方法执行，直接返回已完成的 Task/ValueTask ║
 /// ║     - 缓存未命中时执行方法，await 后写入缓存               ║
 /// ║                                                            ║
 /// ║  2. 支持所有 TTL 和 SpEL 特性                              ║
@@ -21,8 +21,13 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║     - CachePut、CacheEvict                                  ║
 /// ║                                                            ║
 /// ║  3. 返回值类型必须与方法的声明一致                         ║
-/// ║     - Task<T> → 缓存 T 类型                                ║
-/// ║     - Task<List<T>> → 缓存 List<T>                        ║
+/// ║     - Task&lt;T&gt; / ValueTask&lt;T&gt; → 缓存 T 类型             ║
+/// ║     - Task&lt;List&lt;T&gt;&gt; → 缓存 List&lt;T&gt;                      ║
+/// ║     - 非泛型 Task / ValueTask 无结果可缓存，每次真实执行   ║
+/// ║                                                            ║
+/// ║  4. 异步方法同样有防击穿                                   ║
+/// ║     - 同一 key 的并发未命中只执行一次，其余调用复用        ║
+/// ║       leader 的结果（详见 Cache 包文档的「缓存击穿防护」）    ║
 /// ╚══════════════════════════════════════════════════════════════╝
 /// </summary>
 [IocService(lifetime: ServiceLifetime.Transient)]

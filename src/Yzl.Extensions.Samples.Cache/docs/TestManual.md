@@ -315,7 +315,8 @@ done
 
 ## 6. 第六章：异步缓存
 
-异步方法（`Task<T>`）与同步方法用法完全一致，`Condition` / `Unless` / `slidingTtl` 全部适用。
+异步方法（`Task<T>` / `ValueTask<T>`）与同步方法用法完全一致，`Condition` / `Unless` / `slidingTtl` 全部适用。
+非泛型 `Task` / `ValueTask`（无返回值）没有可缓存的 `T`，每次都会真实执行。
 
 | # | 端点 | 注解 | 期望 |
 |---|------|------|------|
@@ -342,9 +343,30 @@ curl -s "http://localhost:16605/api/samples/async/all" | jq '{elapsedMs, callCou
 curl -s "http://localhost:16605/api/samples/async/call-count" | jq
 ```
 
+> 6.2 的键 `key:"#user.Id"` 是**属性链表达式**，解析出的结果干净地参与拼接，生成的键为 `async:users:1`（不含 `\0` 填充），
+> 因此写回后 6.1 的下一次读能真正命中。`cacheName` 与 `key` 之间框架只补一个 `:`，
+> 所以 `cacheName:"async:users"` 自身含 `:` 也不会生成 `async:users1`。
+>
 > 6.3 的键是 SpEL 字符串常量 `'all'` —— 注意单引号，否则会被当作变量名。
 >
 > `AsyncCacheService.DeleteUserAsync`（`CacheEvict`，~300ms）在服务层已实现，但**未暴露 HTTP 端点**，因此无对应 curl 用例；其行为可参考 2.3 的同步版本。
+
+### 6.5 并发防击穿验证（异步方法）
+
+异步方法同样有防击穿：同一未命中 key 的并发调用只执行一次，其余调用复用 leader 的结果。
+用一个临时进程内计数不好断言，这里用「耗时」间接验证 —— 16 个并发请求同一未命中的 key，
+若击穿防护失效，`GetUserAsync` 会被执行 16 次（各 ~1500ms）；生效则只执行 1 次。
+
+```bash
+# 先让缓存过期 / 换一个未被访问过的 id，再并发打
+for i in $(seq 1 16); do curl -s "http://localhost:16605/api/samples/async/7" & done; wait
+curl -s "http://localhost:16605/api/samples/async/call-count" | jq
+```
+
+服务台日志里 `[异步Cacheable] 开始执行异步查询：id=7` 应**只出现一次**（16 个并发请求共享同一次执行）。
+
+> 该防护只对同一实例内的并发调用生效（登记表在进程内）；
+> 多实例部署时各实例各自登记一次，跨实例的去重需要靠 Redis 分布式锁，不在本包范围内。
 
 ---
 
@@ -404,8 +426,10 @@ curl -s -X POST "http://localhost:16605/api/samples/redis/update" -d "id=1&name=
 用 `redis-cli` 直接验证键是否落库：
 
 ```bash
-redis-cli -h localhost -p 6379 --scan --pattern "*redis:users*"
+redis-cli -h localhost -p 6379 --scan --pattern "redis:users:*"
 ```
+
+> 键格式为 `{cacheName}:{key}`，且 `cacheName` 与 `key` 之间**只保留一个 `:`** —— `cacheName` 自身含 `:`（`redis:users`）不会退化成 `redis:users1`。
 
 **关键断言：** 8.1 与 8.4 使用**不同的缓存区域**（`redis:users` vs `memory:users`），因此各自的首次调用都会真实执行（~1500ms），第二次才命中。
 
