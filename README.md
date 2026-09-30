@@ -205,7 +205,7 @@ dotnet run --project src/Yzl.Extensions.Samples.OpenFeign.AOT
 
 端口 **16605** — 演示 [Yzl.Extensions.Cache](https://www.nuget.org/packages/Yzl.Extensions.Cache) 缓存框架的全部特性。
 
-**涉及 NuGet 包：** `Yzl.Extensions.Cache`
+**涉及 NuGet 包：** `Yzl.Extensions.Cache`、`Yzl.Extensions.Http.OpenFeign`（第十一章远程调用）
 
 **启动：**
 ```bash
@@ -225,14 +225,19 @@ dotnet run --project src/Yzl.Extensions.Samples.Cache
 | 异步方法缓存 | `Services/AsyncCacheService.cs` |
 | 滑动过期策略 | `Services/SlidingExpirationService.cs` |
 | Redis 后端缓存 | `Services/RedisCacheService.cs` |
+| OpenFeign + Cacheable（远程调用结果缓存） | `Feign/ICacheDemoFeignClient.cs`、`Services/FeignCacheService.cs` |
 
 > 服务通过 `[IocService]` 特性 + `AddBatchServices()` 批量扫描注册（而非逐个手写 `AddTransient<T>()`）。
-> 缓存注解依赖 Castle DynamicProxy，**被注解的方法必须是 `virtual`**。
+> 缓存注解依赖 Castle DynamicProxy，**被注解的方法必须是 `virtual`**，
+> 或**把注解读在接口方法上**（第十一章的 `ICacheDemoFeignClient` 即后者，接口由 OpenFeign 注册进 DI，无需实现类）。
 > Redis 是否启用由配置项 `redis:main-site` 决定（未配置时仅内存缓存，第八章端点不可用）。
+> 注册顺序有硬约束：`AddBatchServices()` → `AddFeignStarter(...)` → `AddEnableCaching(...)`，
+> **`AddEnableCaching` 必须最后调用**（它要扫描容器里已注册的接口服务；晚注册的接口静默失效）。
+> 第十一章需先启动 `Samples.Api`（16600）。
 
 **测试手册：** [src/Yzl.Extensions.Samples.Cache/docs/TestManual.md](src/Yzl.Extensions.Samples.Cache/docs/TestManual.md)
-— 九章 curl 用例、`elapsedMs` 判定标准、一键 `test.sh`、以及已知行为限制
-（`allEntries` 在内存提供器上为空操作、`callCount` 受 Transient 生命周期影响）。
+— 十一章 curl 用例、`elapsedMs` 判定标准、一键 `test.sh`、以及已知行为限制
+（`allEntries` 在内存提供器上为空操作、`callCount` 受 Transient 生命周期影响、第十一章需下游在运行）。
 
 ---
 

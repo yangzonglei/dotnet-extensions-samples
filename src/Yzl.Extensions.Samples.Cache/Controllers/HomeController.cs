@@ -21,6 +21,7 @@ public class HomeController : ControllerBase
     private readonly SlidingExpirationService _sliding;
     private readonly RedisCacheService _redis;
     private readonly CacheEvictAllService _evictAll;
+    private readonly FeignCacheService _feign;
 
     public HomeController(
         BasicCacheService basicCache,
@@ -31,7 +32,8 @@ public class HomeController : ControllerBase
         AsyncCacheService async,
         SlidingExpirationService sliding,
         RedisCacheService redis,
-        CacheEvictAllService evictAll)
+        CacheEvictAllService evictAll,
+        FeignCacheService feign)
     {
         _basicCache = basicCache;
         _lifecycle = lifecycle;
@@ -42,6 +44,7 @@ public class HomeController : ControllerBase
         _sliding = sliding;
         _redis = redis;
         _evictAll = evictAll;
+        _feign = feign;
     }
 
     /// <summary>
@@ -83,6 +86,7 @@ public class HomeController : ControllerBase
             sliding_calls = _sliding.CallCount,
             redis_calls = _redis.CallCount,
             evictAll_calls = _evictAll.CallCount,
+            feign_calls = _feign.CallCount,
             tip = "调用统计计数的是实际执行的方法次数（不含缓存命中的请求），用于验证缓存命中率"
         });
     }
@@ -151,6 +155,8 @@ public class HomeController : ControllerBase
             <li><span class='endpoint post'>POST</span> /api/samples/lifecycle/update <span class='desc'>更新（CachePut，始终执行并写入）</span></li>
             <li><span class='endpoint post'>POST</span> /api/samples/lifecycle/delete <span class='desc'>删除（CacheEvict）</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/lifecycle/refresh/1'>/api/samples/lifecycle/refresh/{id}</a> <span class='desc'>强制刷新缓存（CachePut）</span></li>
+            <li><span class='endpoint post'>POST</span> /api/samples/lifecycle/update-body <span class='desc'>[FromBody] 复杂类型 UserDto（CachePut）</span></li>
+            <li><span class='endpoint post'>POST</span> /api/samples/lifecycle/delete-body <span class='desc'>[FromBody] 简单类型 id（CacheEvict）</span></li>
         </ul>
     </div>
 
@@ -227,6 +233,22 @@ public class HomeController : ControllerBase
         </ul>
     </div>
 
+    <h2>📖 第十一章：OpenFeign + Cacheable（远程调用结果缓存）</h2>
+    <div class='section'>
+        <ul>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/feign/1'>/api/samples/feign/{id}</a> <span class='badge redis'>远程</span> <span class='desc'>远程查询用户（首次 ~10s，命中 ~0ms）</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/feign/ping'>/api/samples/feign/ping</a> <span class='badge diag'>对照</span> <span class='desc'>远程 ping（不走缓存，检查下游可用性）</span></li>
+        </ul>
+        <p class='desc' style='margin-top:8px;display:block;'>
+            ⚠️ 需先启动 Samples.Api（http://localhost:16600）。链路：
+            Controller → FeignCacheService（纯转发）→ ICacheDemoFeignClient（<b>[Cacheable] 标在这个接口的方法上</b>）→ Samples.Api 的 10 秒接口。
+            <br/>
+            与 Java/Spring 写法一致：注解直接标在 OpenFeign 接口方法上即可生效，命中时 HTTP 请求根本不会发出（看 elapsedMs 判断）。
+            <br/>
+            ℹ️ 该注解未指定 cacheType，默认是 <b>Memory</b>（进程内），服务重启即失效 —— 想要跨进程请显式写 <code>cacheType: CacheType.Redis</code>。
+        </p>
+    </div>
+
     <h2>🔍 诊断工具：执行次数统计</h2>
     <div class='section'>
         <ul>
@@ -235,6 +257,7 @@ public class HomeController : ControllerBase
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/condition/combined-count'>/api/samples/condition/combined-count</a> <span class='badge diag'>diag</span> <span class='desc'>GetUserCombined 执行次数</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/condition/async-unless-count'>/api/samples/condition/async-unless-count</a> <span class='badge diag'>diag</span> <span class='desc'>GetUserAsyncUnless 执行次数</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/async/call-count'>/api/samples/async/call-count</a> <span class='badge diag'>diag</span> <span class='desc'>GetUserAsync 执行次数</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/feign/call-count'>/api/samples/feign/call-count</a> <span class='badge diag'>diag</span> <span class='desc'>请求进入 FeignCacheService 的次数（不等于 HTTP 次数）</span></li>
         </ul>
     </div>
 

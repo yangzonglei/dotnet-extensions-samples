@@ -11,6 +11,7 @@
 #   .NET 8.0 SDK、curl 已安装；端口 16605 未被占用
 #   首次运行会构建并还原 NuGet 包，耗时较长
 #   未配置 redis:main-site 时仅内存缓存，第八章端点不可用（本脚本不覆盖）
+#   第十一章需要 Samples.Api（16600）在运行；未启动时该章自动跳过
 #
 # 【用法】
 #   chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
@@ -127,6 +128,33 @@ assert_timing "9.2 逐条清除后重新加载" "$(ms $HOST/evict-all/1)" miss
 # 9.3 allEntries 在 MemoryCacheProvider 上是空操作（RemoveByPrefixAsync 未实现）
 fire_post "$HOST/evict-all/clear-all" ""
 assert_timing "9.3 allEntries 内存下为空操作(仍命中)" "$(ms $HOST/evict-all/1)" hit
+
+echo ""
+echo "===== 第十一章：OpenFeign + Cacheable ====="
+# 需要下游 Samples.Api（16600）。未启动时跳过，不影响其余用例。
+if curl -s -o /dev/null --max-time 3 "http://localhost:16600/api/test/ping"; then
+    # 用时间戳做 id：feign:users 区域是进程内内存缓存（注解未指定 cacheType），
+    # 同一进程内重复跑脚本时固定 id 会让「首次未命中」假性失败
+    FEIGN_ID=$(date +%s)
+
+    # 11.2 对照组：无缓存的远程调用。耗时只有几十毫秒，
+    # 无法用时延判定「是否真的走了远程」，因此改成校验响应内容。
+    if curl -s --max-time 5 "$HOST/feign/ping" | grep -q '"remote":"pong"'; then
+        echo -e "  ${GREEN}✅ PASS${NC}: 11.2 远程 ping 返回 pong（下游可达）"
+        PASS=$((PASS+1))
+    else
+        echo -e "  ${RED}❌ FAIL${NC}: 11.2 远程 ping 未返回 pong"
+        FAIL=$((FAIL+1))
+    fi
+
+    # 11.1 首次：未命中 → 真实远程（服务端睡 10 秒）
+    assert_timing "11.1 首次未命中(远程 ~10s)" "$(ms $HOST/feign/$FEIGN_ID)" miss
+    # 11.1 二次：命中 → 未发出 HTTP，立即返回
+    assert_timing "11.1 二次命中(未发远程)"   "$(ms $HOST/feign/$FEIGN_ID)" hit
+    assert_timing "11.1 三次命中(未发远程)"   "$(ms $HOST/feign/$FEIGN_ID)" hit
+else
+    echo -e "  ⏭ SKIP: Samples.Api (16600) 未启动 —— 第十一章需要它提供 10 秒接口"
+fi
 
 cleanup
 

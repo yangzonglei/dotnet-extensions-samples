@@ -19,6 +19,20 @@ public sealed class TestController : ControllerBase
     [HttpGet("users/{id:long}")]
     public UserDto GetById(long id) => new(id, "Alice", 20, "Shanghai");
 
+    /// <summary>
+    /// 慢查询端点 —— 固定耗时 10 秒。
+    ///
+    /// 专供 Yzl.Extensions.Samples.Cache 的「OpenFeign + Cacheable」用例：
+    /// 远程耗时被放大到 10s，缓存命中与否在耗时上一眼可辨
+    /// （命中 ≈ 0ms，未命中 ≈ 10000ms）。
+    /// </summary>
+    [HttpGet("users/{id:long}/slow")]
+    public async Task<UserDto> GetByIdSlow(long id, CancellationToken cancellationToken)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+        return new UserDto(id, "SlowAlice", 20, "Shanghai");
+    }
+
     [HttpGet("users/{id:long}/getbyid2")]
     public ResponseResult<UserDto> GetById2(long id)
         => new(0, new UserDto(id, "GetById2 User", 25), "success");

@@ -7,6 +7,8 @@
   <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Core\Yzl.Extensions.Core.csproj" />
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Cache\Yzl.Extensions.Cache.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign\Yzl.Extensions.Http.OpenFeign.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign.Abstractions\Yzl.Extensions.Http.OpenFeign.Abstractions.csproj" />
   </ItemGroup>
 
   <!-- 默认模式：NuGet 包引用 -->
@@ -14,10 +16,17 @@
     <PackageReference Include="Yzl.Extensions.Cache" />
     <!-- [IocService] / AddBatchServices() 来自 Core 包（Cache 包已传递引用，此处显式声明以表意清晰） -->
     <PackageReference Include="Yzl.Extensions.Core" />
+    <!-- OpenFeign：Service 层通过声明式 HTTP 客户端远程调用 Samples.Api -->
+    <PackageReference Include="Yzl.Extensions.Http.OpenFeign" />
   </ItemGroup>
 
   <!-- 公共测试面板 -->
   <ItemGroup>
     <ProjectReference Include="..\Yzl.Extensions.Samples.TestDashboard\Yzl.Extensions.Samples.TestDashboard.csproj" />
+  </ItemGroup>
+
+  <!-- 远程调用返回的 DTO（Samples.Models.UserDto），与 Samples.Api 共用同一类型 -->
+  <ItemGroup>
+    <ProjectReference Include="..\Samples.Models\Samples.Models.csproj" />
   </ItemGroup>
 </Project>

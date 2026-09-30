@@ -10,7 +10,7 @@ namespace Yzl.Extensions.Samples.Cache.Controllers;
 /// </summary>
 [ApiController]
 [TestDashboardInfo("📖 第六章：异步缓存", Order = 6, Badge = "6")]
-[Route("api/samples")]
+[Route("api/samples/async")]
 public class AsyncCacheController : ControllerBase
 {
     private readonly AsyncCacheService _async;
@@ -24,7 +24,7 @@ public class AsyncCacheController : ControllerBase
     /// 【6.1】异步查询用户
     /// </summary>
     [Description("【6.1】异步查询用户")]
-    [HttpGet("async/{id}")]
+    [HttpGet("{id}")]
     public async Task<IActionResult> AsyncGet(int id)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -44,7 +44,7 @@ public class AsyncCacheController : ControllerBase
     /// 【6.2】异步更新用户
     /// </summary>
     [Description("【6.2】异步更新用户（CachePut）")]
-    [HttpPost("async/update")]
+    [HttpPost("update")]
     public async Task<IActionResult> AsyncUpdate([FromForm] int id, [FromForm] string? name = null,
         [FromForm] int age = 0, [FromForm] string? email = null)
     {
@@ -67,7 +67,7 @@ public class AsyncCacheController : ControllerBase
     /// 【6.3】异步获取全部用户
     /// </summary>
     [Description("【6.3】异步获取全部用户（缓存集合）")]
-    [HttpGet("async/all")]
+    [HttpGet("all")]
     public async Task<IActionResult> AsyncGetAll()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -87,7 +87,7 @@ public class AsyncCacheController : ControllerBase
     /// 查看 AsyncCache 实际方法执行次数
     /// </summary>
     [Description("📊 GetUserAsync 执行次数")]
-    [HttpGet("async/call-count")]
+    [HttpGet("call-count")]
     public IActionResult AsyncCallCount()
     {
         return Ok(new

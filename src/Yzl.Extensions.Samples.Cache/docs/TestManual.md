@@ -14,6 +14,21 @@
 > 不具备跨请求的累计语义；`/api/samples/stats` 与各 `*-count` 端点同理，永远返回 `0`。
 > 详见 §1 末尾的说明。
 
+### 在仪表盘上测试 POST 端点
+
+手册里所有 `curl -X POST ... -d "..."` 的用例，都可以直接在 <http://localhost:16605/dashboard>
+面板上完成：写方法（`POST`/`PUT`/`PATCH`/`DELETE`）的路由条下会自动展开该端点需要的参数。
+
+- `[FromForm]` 参数 → 预填好参数名的「Form 参数」键值行（如 2.2 的 `id=1&name=Alice&age=25&email=test@test.com`），
+  改完值点「▶ 测试」即以 `application/x-www-form-urlencoded` 发送
+- `[FromQuery]` / `[FromHeader]` 参数 → 对应的「Query 参数」/「请求头参数」行
+- 路径模板里的 `{id}` → 已有的「URL 参数」输入框，无需手工拼 URL
+- 复杂类型（`[FromBody]`）→ 预填好 JSON 骨架的文本框，以 `application/json` 发送
+- 端点未声明任何可绑定参数（自行读 `Request.Body`）→ 提供「原始请求体」文本框，内容原样发送，留空则不发送 body
+
+> 面板只会把**填写了参数名的行**拼进请求，所以默认预填值可以直接使用；改动后无需重启服务。
+
+
 ---
 
 ## 0. 启动
@@ -58,16 +73,38 @@ else
 
 连接字符串在 `appsettings.Development.json` 的 `redis:main-site` 中配置（该文件不入库，需自行按实际环境填写）。**未配置 Redis 时，第八章的 `redis/*` 端点会因缺少 `RedisCacheProvider` 而失败**，其余章节不受影响。
 
+> ⚠️ **Redis 配置只在 `Development` 环境下可见**：`redis:main-site` 写在 `appsettings.Development.json` 里，
+> 而 ASP.NET Core 按 `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT` 决定是否加载该文件。
+>
+> | 启动方式 | 环境 | `redis:main-site` | 启动日志 |
+> |---|---|---|---|
+> | `dotnet run`（读 `Properties/launchSettings.json`） | Development | 读到 | `✓ Redis 缓存已启用` |
+> | `dotnet bin/Debug/net8.0/….dll`（无环境变量） | Production | **读不到** | `✓ 内存缓存已启用（…）` |
+>
+> 直接运行 dll 时，**每个缓存区域都会退化成进程内存缓存**：[Cacheable] 未显式指定
+> `cacheType` 时默认是 `CacheType.Memory`，与是否启用 Redis 无关，只有
+> `cacheType: CacheType.Redis`（如第八章 8.1）才会去解析 `RedisCacheProvider` ——
+> 而该 Provider 只在 `enableRedis: true` 时注册。
+>
+> 判断当前跑在哪种模式，**以启动日志那一行为准**，不要凭配置文件里有没有连接串来推断。
+
 ### 服务注册方式
 
 本示例用 `[IocService]` 特性 + `AddBatchServices()` 批量扫描注册服务，而非逐个手写 `AddTransient<T>()`：
 
 ```csharp
 builder.Services.AddBatchServices();               // 扫描 [IocService] 并注册
-builder.Services.AddEnableCaching(assemblies: null, enableRedis: false);
+// …第十一章还需要 AddFeignStarter(...) 注册 [FeignClient] 接口…
+builder.Services.AddEnableCaching(assemblies: null, enableRedis: false);   // ← 必须最后调用
+builder.Services.AddControllers();
 ```
 
-> ⚠️ 缓存注解依赖 Castle DynamicProxy，因此**被注解的方法必须是 `virtual`**（本示例全部满足）。
+> ⚠️ **`AddEnableCaching` 必须最后调用。** 它在调用时会扫描此刻容器里**已有**的服务
+> （包括 `AddFeignStarter` 注册的 OpenFeign 接口）来叠加缓存代理，
+> 晚于它注册的接口不会被包住，且是**静默**失效。详见 [§10](#10-第十一章openfeign--cacheable远程调用结果缓存)。
+
+> ⚠️ 缓存注解依赖 Castle DynamicProxy，因此注解落在**类方法**上时该方法必须是 `virtual`（本示例除第十一章外全部满足）；
+> 也可把注解**直接标在接口方法上**（接口须已注册进 DI），此时无需实现类、无需 `virtual` —— 第十一章即此写法。
 
 ---
 
@@ -149,6 +186,9 @@ curl -s "http://localhost:16605/api/samples/lifecycle/refresh/1" | jq '{elapsedM
 ```
 
 **关键断言：** 2.2 与 2.4 的 `elapsedMs` **两次都非 0** —— 这正是 `CachePut` 与 `Cacheable` 的核心差异。
+
+> 2.2 / 2.3 也可以直接在 <http://localhost:16605/dashboard> 面板执行：`lifecycle/update` 行下会自动列出
+> `id`/`name`/`age`/`email` 四个预填的 Form 输入框（见文首「在仪表盘上测试 POST 端点」）。
 
 ---
 
@@ -479,102 +519,138 @@ curl -s "http://localhost:16605/api/samples/evict-all/2" | jq '.elapsedMs'   # ~
 
 ---
 
-## 10. 一键自动化脚本
+## 10. 第十一章：OpenFeign + Cacheable（远程调用结果缓存）
 
-保存为 `src/Yzl.Extensions.Samples.Cache/test.sh`：
+本章验证：**远程调用 + 缓存**组合下 `[Cacheable]` 是否生效。
 
-```bash
-#!/bin/bash
-set -e
+完整调用链：
 
-cd "$(dirname "$0")/../.."
-PROJECT="src/Yzl.Extensions.Samples.Cache"
-HOST="http://localhost:16605/api/samples"
-PASS=0
-FAIL=0
-
-cleanup() {
-  kill %1 2>/dev/null; wait 2>/dev/null
-  lsof -ti:16605 | xargs kill -9 2>/dev/null
-}
-
-# $1=描述 $2=实际值 $3=判定：hit | miss
-assert_timing() {
-  local desc="$1" actual="$2" kind="$3"
-  local ok
-  if [ "$kind" = "hit" ]; then
-    [ "$actual" -le 50 ] && ok=1 || ok=0
-  else
-    [ "$actual" -ge 1000 ] && ok=1 || ok=0
-  fi
-  if [ "$ok" -eq 1 ]; then
-    echo "  ✅ $desc (${actual}ms)"
-    PASS=$((PASS+1))
-  else
-    echo "  ❌ $desc (${actual}ms, 期望 $kind)"
-    FAIL=$((FAIL+1))
-  fi
-}
-
-ms() { curl -s "$1" | sed -n 's/.*"elapsedMs":\([0-9]*\).*/\1/p'; }
-ms_post() { curl -s -X POST "$1" -d "$2" | sed -n 's/.*"elapsedMs":\([0-9]*\).*/\1/p'; }
-
-cleanup
-dotnet run --project "$PROJECT" 2>/dev/null &
-sleep 6
-
-echo "===== 第一章：基础 Cacheable ====="
-assert_timing "1.1 首次未命中" "$(ms $HOST/basic/1)"        miss
-assert_timing "1.1 二次命中"   "$(ms $HOST/basic/1)"        hit
-
-echo "===== 第二章：CachePut / CacheEvict ====="
-assert_timing "2.1 首次未命中" "$(ms $HOST/lifecycle/1)"    miss
-assert_timing "2.1 二次命中"   "$(ms $HOST/lifecycle/1)"    hit
-# 2.4 refresh 是 CachePut，两次都应真实执行（~1500ms）
-assert_timing "2.4 CachePut 第 1 次仍执行" "$(ms $HOST/lifecycle/refresh/1)" miss
-assert_timing "2.4 CachePut 第 2 次仍执行" "$(ms $HOST/lifecycle/refresh/1)" miss
-# 2.3 CacheEvict 后 2.1 应重新执行
-ms_post "$HOST/lifecycle/delete" "id=1" > /dev/null
-assert_timing "2.3 Evict 后重新加载" "$(ms $HOST/lifecycle/1)" miss
-
-echo "===== 第四章：Condition / 拼写错误 ====="
-# 种子数据只有 id=1/2/5/99；99 满足 #id > 10
-assert_timing "4.1 id=99 首次未命中" "$(ms $HOST/condition/cacheable/99)" miss
-assert_timing "4.1 id=99 二次命中"   "$(ms $HOST/condition/cacheable/99)" hit
-assert_timing "4.1 id=5 永不缓存(1)" "$(ms $HOST/condition/cacheable/5)"  miss
-assert_timing "4.1 id=5 永不缓存(2)" "$(ms $HOST/condition/cacheable/5)"  miss
-assert_timing "4.8 typo-condition"  "$(ms $HOST/condition/typo-condition/1)" miss
-assert_timing "4.9 typo-unless"     "$(ms $HOST/condition/typo-unless/1)"    miss
-
-echo "===== 第六章：异步缓存 ====="
-assert_timing "6.1 首次未命中" "$(ms $HOST/async/1)"        miss
-assert_timing "6.1 二次命中"   "$(ms $HOST/async/1)"        hit
-
-echo "===== 第九章：CacheEvict ====="
-assert_timing "9.1 首次未命中" "$(ms $HOST/evict-all/1)"    miss
-assert_timing "9.1 二次命中"   "$(ms $HOST/evict-all/1)"    hit
-# 9.2 逐条清除对内存提供器有效
-ms_post "$HOST/evict-all/evict-single/1" "" > /dev/null
-assert_timing "9.2 逐条清除后重新加载" "$(ms $HOST/evict-all/1)" miss
-# 9.3 allEntries 在 MemoryCacheProvider 上是空操作（RemoveByPrefixAsync 未实现）
-ms_post "$HOST/evict-all/clear-all" "" > /dev/null
-assert_timing "9.3 allEntries 内存下为空操作(仍命中)" "$(ms $HOST/evict-all/1)" hit
-
-cleanup
-echo "===== 结果: $PASS passed, $FAIL failed ====="
-[ "$FAIL" -eq 0 ] && echo "🎉 全部通过!" || echo "😢 有失败用例"
+```
+CacheTestController                 GET /api/samples/feign/{id}
+  └─→ FeignCacheService             ← 纯转发，不带缓存注解
+        └─→ ICacheDemoFeignClient   ← [Cacheable] 标在这个接口的方法上
+              └─→ Samples.Api       TestController.GetByIdSlow()  —— 先睡 10 秒再返回
 ```
 
-运行：
+> ⚠️ **前置条件：必须先启动 `Samples.Api`（端口 16600）。**
+>
+> ```bash
+> dotnet run --project src/Samples.Api/Samples.Api.csproj    # 占用 16600
+> ```
+>
+> 该端点是本章新增的 `GET /api/test/users/{id}/slow`，固定耗时 10 秒 —— 刻意把远程耗时
+> 放大，让「命中 ≈ 0ms」与「未命中 ≈ 10000ms」的差异一眼可辨。
+
+| # | 端点 | 注解 | 期望 |
+|---|------|------|------|
+| 11.1 | `GET /api/samples/feign/{id}` | `Cacheable(cacheName:"feign:users", key:"#id", ttlSeconds:60)`（标在 `ICacheDemoFeignClient.GetByIdSlow` 上） | 第 1 次 ~10000ms，第 2/3 次 ~0ms |
+| 11.2 | `GET /api/samples/feign/ping` | 无（对照组） | 每次都是真实远程调用，瞬时返回 `pong` |
+| 11.3 | `GET /api/samples/feign/call-count` | 诊断 | 只反映「请求进到 FeignCacheService 的次数」，**不能**用来判断缓存命中 |
+
+> ✅ **`[Cacheable]` 可以直接标在 OpenFeign 接口的方法上（与 Java/Spring 一致）。**
+>
+> ```csharp
+> // ✅ 生效 —— 接口方法上的注解会被缓存框架识别
+> [Cacheable(cacheName: "feign:users", key: "#id", ttlSeconds: 60)]
+> [Get("/api/test/users/{id}/slow")]
+> Task<UserDto> GetByIdSlow([PathVariable("id")] long id);
+> ```
+>
+> 注意上面**没有** `cacheType`：默认值是 `CacheType.Memory`，所以 `feign:users` 区域
+> 落在**进程内**缓存里，服务重启即失效。想让远程结果跨进程/跨重启共享，
+> 需同时满足两个条件：启动日志是 `✓ Redis 缓存已启用`，且注解显式写
+> `cacheType: CacheType.Redis`（参考第八章 8.1 的写法）。
+>
+> `AddEnableCaching` 会扫描**已注册进 DI 容器的接口服务**，为「注解标在接口方法上」的接口
+> 叠一层缓存代理（`CacheExtensions.cs` 的 ③ 区域）。命中缓存时该代理只设置返回值、
+> 不调用 `invocation.Proceed()`，向下的 OpenFeign 拦截器根本不执行 —— **HTTP 一个字节都不会发出**。
+>
+> 这条路径对任何「已注册进容器的接口服务」都成立，不限于 OpenFeign。
+>
+> ⚠️ **代价是一条顺序约束**：`AddEnableCaching` 在调用时会扫描此刻容器里已有的服务描述符，
+> 因此必须**最后调用**：
+>
+> ```csharp
+> builder.Services.AddBatchServices();          // 1. 业务服务（[IocService]）
+> builder.Services.AddFeignStarter(...);        // 2. 远程客户端接口（[FeignClient]）
+> builder.Services.AddEnableCaching(...);       // 3. 必须放最后
+> ```
+>
+> 晚于它注册的接口不会被包住，而且是**静默**失效。
+
+```bash
+# 11.2 先确认下游可用（瞬时返回，不走缓存）
+curl -s "http://localhost:16605/api/samples/feign/ping" | jq
+# → { "remote": "pong", "elapsedMs": 26, ... }
+
+# 11.1 第 1 次：缓存未命中 → 真实远程调用，服务端睡 10 秒
+curl -s "http://localhost:16605/api/samples/feign/1" | jq
+# → { "elapsedMs": 10050, "cacheKey": "feign:users:1", "cacheHit": false, ... }
+
+# 11.1 第 2 次：缓存命中 → HTTP 请求根本没发出去
+curl -s "http://localhost:16605/api/samples/feign/1" | jq
+# → { "elapsedMs": 0, "cacheKey": "feign:users:1", "cacheHit": true, ... }
+```
+
+**怎么判断缓存生效 —— 只认 `elapsedMs`：**
+
+未命中 ≈ 10000ms、命中 ≈ 0ms，差异足够大，不需要看别的字段。
+
+**关于 `serviceCallCount` / `methodExecutedThisCall`（已不能作为命中判据）：**
+
+缓存层在 `ICacheDemoFeignClient` 的**接口方法**上，短路发生在这两个字段所属的
+`FeignCacheService` **之下**。命中缓存时被拦住的只是更下层的 HTTP 调用，
+`FeignCacheService` 的方法体照常执行，因此：
+
+- `methodExecutedThisCall` 恒为 `1`（不再能证明「没发 HTTP」）
+- `serviceCallCount` 等于「请求进入该服务的累计次数」，每次刷新都会 +1
+
+它们现在只是链路探针（确认请求确实穿到了这一层），判定命中请以 `elapsedMs` 为准。
+`test.sh` 里第十一章的三条断言也正是基于耗时的（`miss` / `hit` / `hit`），不受影响。
+
+> 💡 **为什么第十一章的 id 要用时间戳**：`[Cacheable(cacheName: "feign:users", …)]`
+> 上**没有**指定 `cacheType`，默认即 `CacheType.Memory` ⇒ 此区域是**进程内**缓存，
+> 服务一重启就没了（两次响应都带 10 秒耗时，属正常，不是缓存失效）。
+> 用时间戳仍是对的：同一个进程内重复跑脚本时，固定 id 会让「首次未命中」假性失败。
+
+---
+
+## 11. 一键自动化脚本
+
+脚本文件：[test.sh](../test.sh) —— **以文件为准**，本节不再内嵌副本（此前内嵌的旧版本
+缺少第十一章，容易误导）。
 
 ```bash
 chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 ./src/Yzl.Extensions.Samples.Cache/test.sh
 ```
 
+覆盖范围：第一 / 二 / 四 / 六 / 九 / 十一章。脚本自行拉起服务（端口 16605），
+退出时 `trap` 清理。
+
+> ⚠️ **第十一章需要 `Samples.Api`（16600）同时在运行**，否则该章打印
+> `⏭ SKIP: Samples.Api (16600) 未启动`，其余章节不受影响。
+>
+> ```bash
+> dotnet run --project src/Samples.Api/Samples.Api.csproj &
+> ./src/Yzl.Extensions.Samples.Cache/test.sh
+> ```
+>
+> 两个服务都起来时预期：**23 passed, 0 failed**。
+> 仅 Cache 单独跑时：**19 passed, 0 failed**（跳过第十一章的 4 条）。
+
+**脚本的几个关键设计**（读代码前先了解，否则容易误判为 bug）：
+
+| 设计 | 原因 |
+|------|------|
+| 就绪探测用 `/` 而非 `/basic/1` | 用 `/basic/1` 探测会预热缓存，导致「1.1 首次未命中」失败 |
+| 第十一章用 `FEIGN_ID=$(date +%s)` | 同一进程内重复跑脚本时，固定 id 的缓存还在，「首次未命中」会假性失败 |
+| 11.2 用响应内容而非耗时判定 | ping 只有几十毫秒，耗时分不出「真实远程」与「缓存命中」 |
+| 第十一章整体包在 `if curl ... 16600` 里 | 下游未启动时降级为 SKIP，不拖垮其余用例 |
+
 ---
 
-## 11. 结果记录表
+## 12. 结果记录表
 
 | 章节 | 用例 | 第 1 次 (ms) | 第 2 次 (ms) | 结论 |
 |------|------|-------------|-------------|------|
@@ -613,6 +689,8 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 | 9.1 | `evict-all/1` | | | |
 | 9.2 | `evict-all/evict-single/1` → 再查 | | | |
 | 9.3 | `evict-all/clear-all` → 再查（内存下仍命中） | | | |
+| 11.1 | `feign/{新id}`（需 Samples.Api） | | | |
+| 11.2 | `feign/ping`（需 Samples.Api） | | | |
 
 **判定标准：**
 
@@ -620,13 +698,28 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 - **Redis 提供器（8.x）**：命中 ✅ = `elapsedMs ≤ 200`（每次读都有一次网络往返，实测约 100ms）
 - 个别方法体为 500ms / 2000ms（如 `lifecycle/update`、`async/all`），按对应章节说明调整阈值
 
+**第十一章的实测记录**（`Samples.Api` + Cache 同时运行，id=7）：
+
+| 调用 | elapsedMs | serviceCallCount | methodExecutedThisCall | cacheHit |
+|------|-----------|------------------|------------------------|----------|
+| 第 1 次 | 10043 | 1 | 1 | false |
+| 第 2 次 | 0 | 2 | 1 | true |
+| 第 3 次 | 0 | 3 | 1 | true |
+
+`methodExecutedThisCall` 恒为 1 属**预期**：缓存层在 `ICacheDemoFeignClient` 接口上，
+短路发生在 `FeignCacheService` 之下，该服务的方法体每次都会执行。
+判定命中只看 `elapsedMs`（10043 → 0 → 0）。
+
+同时核对 `Samples.Api` 的访问日志：三次客户端调用只对应**一条** `GET /api/test/users/7/slow`
+记录 —— 缓存命中时 HTTP 请求确实没有发出去（这才是「缓存生效」的硬证据，耗时只是佐证）。
+
 ---
 
-## 12. 关键文件索引
+## 13. 关键文件索引
 
 | 文件 | 作用 |
 |------|------|
-| [Program.cs](../Program.cs) | `AddBatchServices()` + `AddEnableCaching`，Redis 开关 |
+| [Program.cs](../Program.cs) | `AddBatchServices()` → `AddFeignStarter` → `AddEnableCaching`（**顺序不可换**），Redis 开关 |
 | [Controllers/HomeController.cs](../Controllers/HomeController.cs) | 导航页 `/api/samples` + 统计 `/api/samples/stats`（受 Transient 生命周期限制恒为 0） |
 | [Controllers/BasicCacheController.cs](../Controllers/BasicCacheController.cs) | 第一章：基础 `Cacheable` |
 | [Controllers/CacheLifecycleController.cs](../Controllers/CacheLifecycleController.cs) | 第二章：`CachePut` / `CacheEvict` |
@@ -637,4 +730,8 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 | [Controllers/SlidingExpirationController.cs](../Controllers/SlidingExpirationController.cs) | 第七章：滑动过期 |
 | [Controllers/RedisCacheController.cs](../Controllers/RedisCacheController.cs) | 第八章：Redis / Memory 提供器 |
 | [Controllers/CacheEvictAllController.cs](../Controllers/CacheEvictAllController.cs) | 第九章：`allEntries` 批量清除 |
+| [Controllers/CacheTestController.cs](../Controllers/CacheTestController.cs) | 第十一章：OpenFeign + `Cacheable` 的三个端点（11.1/11.2/11.3） |
+| [Feign/ICacheDemoFeignClient.cs](../Feign/ICacheDemoFeignClient.cs) | 第十一章：OpenFeign 声明式接口，**`[Cacheable]` 标在此接口的方法上**（注解写接口上即可生效的示例） |
+| [Services/FeignCacheService.cs](../Services/FeignCacheService.cs) | 第十一章：纯转发服务（不带缓存注解），链路探针计数器 |
 | [Services/](../Services/) | 全部被代理的服务类（`[IocService]` + `virtual` 方法 + 缓存注解） |
+| `src/Samples.Api/Controllers/TestController.cs` 的 `GetByIdSlow` | 第十一章下游：`GET /api/test/users/{id}/slow`，固定睡 10 秒（端口 16600） |

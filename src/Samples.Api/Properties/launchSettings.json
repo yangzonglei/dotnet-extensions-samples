@@ -3,8 +3,8 @@
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": false,
-      "launchUrl": "",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:16600/dashboard",
       "applicationUrl": "http://+:16600",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

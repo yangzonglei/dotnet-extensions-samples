@@ -106,6 +106,12 @@ internal static class TestDashboardHtml
         font-size: 12px; width: 120px; font-family: monospace; height: 26px;
         }
         .input-param:focus { outline: none; border-color: #40a9ff; box-shadow: 0 0 0 2px rgba(24,144,255,.2); }
+        .input-body {
+        display: block; width: 100%; padding: 6px 8px; border: 1px solid #d9d9d9; border-radius: 3px;
+        font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace; font-size: 12px;
+        line-height: 1.5; resize: vertical; margin-top: 4px;
+        }
+        .input-body:focus { outline: none; border-color: #40a9ff; box-shadow: 0 0 0 2px rgba(24,144,255,.2); }
         .kv-row {
         display: inline-flex; align-items: center; gap: 4px; margin: 3px 6px 3px 0;
         }
@@ -245,10 +251,16 @@ internal static class TestDashboardHtml
 
         // ============================================================
         // 从路由路径中解析 {paramName} 参数
+        //
+        // ⚠ 必须用 route.urlPattern（服务端已剥掉路由约束），不能用 route.path：
+        //   route.path 是路由原文，形如 /api/test/users/{id:long}，
+        //   其中的 ":long" 是路由约束而非 URL 的一部分。
+        //   旧正则 /{(\w+)}/ 匹配不了 {id:long}，参数框根本不渲染，
+        //   且回退替换时会把 "{id:long}" 整个 URL 编码成 %7Bid:long%7D 发出去 → 404。
         // ============================================================
         function parseRouteParams(path) {
             const params = [];
-            const regex = /{(\w+)}/g;
+            const regex = /\{\*{0,2}(\w+)[^}]*\}/g;
             let match;
             while ((match = regex.exec(path)) !== null) {
                 params.push({ name: match[1], defaultValue: getDefaultValue(match[1]) });
@@ -354,57 +366,76 @@ internal static class TestDashboardHtml
             row.appendChild(resp);
 
             // ── 参数解析 ──
-            const routeParams = parseRouteParams(route.path);
+            // urlPattern 是服务端剥掉路由约束后的模板（{id} 而非 {id:long}），
+            // 用于渲染 URL 参数框与拼接请求 URL；path 只是展示用的路由原文。
+            const urlPattern = route.urlPattern || route.path;
+            const routeParams = parseRouteParams(urlPattern);
             const isPost = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(route.method.toUpperCase());
+
+            // 服务端自动提取的可填写参数（仅写方法；GET 为空数组）
+            const apiParams = route.parameters || [];
+            const bodyParam = route.bodyParam || null;
+            const formParams = apiParams.filter(p => p.source === 'form');
+            const queryParams = apiParams.filter(p => p.source === 'query');
+            const headerParams = apiParams.filter(p => p.source === 'header');
 
             // ── 参数区域 ──
             let paramsArea = null;
             let routeParamsSection = null;
-            let queryAddBtn = null;
-            let formAddBtn = null;
+            let jsonBodyArea = null;
+            let rawBodyArea = null;
 
             const hasRouteParams = routeParams.length > 0;
+            // 没有任何可绑定参数、也没有 URL 参数的写方法 → 只提供一个原始 Body 输入框
+            const needsRawBody = isPost && apiParams.length === 0 && !hasRouteParams && !bodyParam;
+            const hasParamArea = hasRouteParams || formParams.length > 0 || queryParams.length > 0
+                || headerParams.length > 0 || bodyParam || needsRawBody;
 
-            if (hasRouteParams) {
+            if (hasParamArea) {
                 paramsArea = document.createElement('div');
                 paramsArea.className = 'params-area';
 
-                // 路由参数
-                routeParamsSection = document.createElement('div');
-                routeParamsSection.className = 'params-section';
-                const title = document.createElement('div');
-                title.className = 'params-title';
-                title.textContent = 'URL 参数';
-                routeParamsSection.appendChild(title);
+                // ── 路由参数（URL 中的 {xxx}） ──
+                if (hasRouteParams) {
+                    routeParamsSection = document.createElement('div');
+                    routeParamsSection.className = 'params-section';
+                    const title = document.createElement('div');
+                    title.className = 'params-title';
+                    title.textContent = 'URL 参数';
+                    routeParamsSection.appendChild(title);
 
-                for (const p of routeParams) {
-                    const pr = document.createElement('div');
-                    pr.className = 'param-row';
-                    const label = document.createElement('span');
-                    label.className = 'param-label';
-                    label.textContent = p.name + ':';
-                    pr.appendChild(label);
-                    const input = document.createElement('input');
-                    input.className = 'input-param param-route';
-                    input.dataset.paramName = p.name;
-                    input.value = p.defaultValue;
-                    pr.appendChild(input);
-                    routeParamsSection.appendChild(pr);
+                    for (const p of routeParams) {
+                        const pr = document.createElement('div');
+                        pr.className = 'param-row';
+                        const label = document.createElement('span');
+                        label.className = 'param-label';
+                        label.textContent = p.name + ':';
+                        pr.appendChild(label);
+                        const input = document.createElement('input');
+                        input.className = 'input-param param-route';
+                        input.dataset.paramName = p.name;
+                        input.value = p.defaultValue;
+                        pr.appendChild(input);
+                        routeParamsSection.appendChild(pr);
+                    }
+                    paramsArea.appendChild(routeParamsSection);
                 }
-                paramsArea.appendChild(routeParamsSection);
 
-                // Query 参数（非 POST）
-                if (!isPost) {
+                // ── Query 参数（非 POST，或服务端标注为 query 的参数） ──
+                if (!isPost || queryParams.length > 0) {
                     const qSection = document.createElement('div');
                     qSection.className = 'params-section';
                     const qTitle = document.createElement('div');
                     qTitle.className = 'params-title';
                     qTitle.innerHTML = 'Query 参数 <button class="btn-add-param" onclick="addKvRow(this, \'query\')">+ 添加</button>';
                     qSection.appendChild(qTitle);
+                    for (const p of queryParams) {
+                        addKvRowTo(qSection, 'query', p.name, p.default ?? '');
+                    }
                     paramsArea.appendChild(qSection);
                 }
 
-                // Form 参数（POST）
+                // ── Form 参数（POST/PUT/PATCH/DELETE） ──
                 if (isPost) {
                     const fSection = document.createElement('div');
                     fSection.className = 'params-section';
@@ -412,7 +443,56 @@ internal static class TestDashboardHtml
                     fTitle.className = 'params-title';
                     fTitle.innerHTML = 'Form 参数 <button class="btn-add-param" onclick="addKvRow(this, \'form\')">+ 添加</button>';
                     fSection.appendChild(fTitle);
+                    for (const p of formParams) {
+                        addKvRowTo(fSection, 'form', p.name, p.default ?? '');
+                    }
                     paramsArea.appendChild(fSection);
+                }
+
+                // ── 请求头参数 ──
+                if (headerParams.length > 0) {
+                    const hSection = document.createElement('div');
+                    hSection.className = 'params-section';
+                    const hTitle = document.createElement('div');
+                    hTitle.className = 'params-title';
+                    hTitle.textContent = '请求头参数';
+                    hSection.appendChild(hTitle);
+                    for (const p of headerParams) {
+                        addKvRowTo(hSection, 'header', p.name, p.default ?? '');
+                    }
+                    paramsArea.appendChild(hSection);
+                }
+
+                // ── JSON 请求体（复杂类型参数，服务端已给出骨架） ──
+                if (bodyParam) {
+                    jsonBodyArea = document.createElement('div');
+                    jsonBodyArea.className = 'params-section';
+                    const jTitle = document.createElement('div');
+                    jTitle.className = 'params-title';
+                    jTitle.textContent = 'JSON 请求体（' + escapeHtml(bodyParam.name) + ': ' + escapeHtml(bodyParam.type) + '）';
+                    jsonBodyArea.appendChild(jTitle);
+                    const ta = document.createElement('textarea');
+                    ta.className = 'input-body body-json';
+                    ta.rows = 8;
+                    ta.value = bodyParam.json ?? '';
+                    jsonBodyArea.appendChild(ta);
+                    paramsArea.appendChild(jsonBodyArea);
+                }
+
+                // ── 原始请求体（端点自行读取 Request.Body） ──
+                if (needsRawBody) {
+                    rawBodyArea = document.createElement('div');
+                    rawBodyArea.className = 'params-section';
+                    const rTitle = document.createElement('div');
+                    rTitle.className = 'params-title';
+                    rTitle.textContent = '原始请求体（留空则不发送 body）';
+                    rawBodyArea.appendChild(rTitle);
+                    const ta = document.createElement('textarea');
+                    ta.className = 'input-body body-raw';
+                    ta.rows = 4;
+                    ta.placeholder = '该端点未声明可绑定参数，内容将原样发送';
+                    rawBodyArea.appendChild(ta);
+                    paramsArea.appendChild(rawBodyArea);
                 }
 
                 row.appendChild(paramsArea);
@@ -428,8 +508,8 @@ internal static class TestDashboardHtml
                 resp.style.display = 'none';
 
                 try {
-                    // 构建 URL
-                    let url = route.path;
+                    // 构建 URL（用 urlPattern：已剥掉 :long 这类路由约束）
+                    let url = urlPattern;
 
                     // 替换路由参数
                     if (paramsArea) {
@@ -442,8 +522,11 @@ internal static class TestDashboardHtml
                         });
                     }
 
-                    // 如果还有未替换的 {param}，用默认值替换
-                    url = url.replace(/{(\w+)}/g, (_, name) => encodeURIComponent(getDefaultValue(name)));
+                    // 如果还有未替换的 {param}，用默认值替换。
+                    // 正则与 parseRouteParams 保持一致：容忍 {id:long} / {id?} / {id=1} / {*slug}，
+                    // 避免把路由约束留在 URL 里（那会 404）。
+                    url = url.replace(/\{\*{0,2}(\w+)[^}]*\}/g,
+                        (_, name) => encodeURIComponent(getDefaultValue(name)));
 
                     // query string
                     let queryString = '';
@@ -471,16 +554,51 @@ internal static class TestDashboardHtml
                         if (pairs.length > 0) formBody = pairs.join('&');
                     }
 
+                    // JSON 请求体（复杂类型参数，服务端已预填骨架）
+                    let jsonBody = null;
+                    if (paramsArea) {
+                        const jsonTa = paramsArea.querySelector('.body-json');
+                        if (jsonTa && jsonTa.value.trim()) jsonBody = jsonTa.value;
+                    }
+
+                    // 原始请求体（端点自行读取 Request.Body）
+                    let rawBody = null;
+                    if (paramsArea && !jsonBody) {
+                        const rawTa = paramsArea.querySelector('.body-raw');
+                        if (rawTa && rawTa.value.length > 0) rawBody = rawTa.value;
+                    }
+
+                    // 请求头参数
+                    const headers = {};
+                    if (paramsArea) {
+                        paramsArea.querySelectorAll('.params-section .kv-row[data-type="header"]').forEach(kv => {
+                            const k = kv.querySelector('.kv-key')?.value;
+                            const v = kv.querySelector('.kv-value')?.value;
+                            if (k) headers[k] = v || '';
+                        });
+                    }
+
                     const fullUrl = url + (queryString ? '?' + queryString : '');
 
                     // 发送请求
                     let fetchOptions = {};
                     if (isPost) {
                         fetchOptions.method = route.method;
-                        if (formBody) {
-                            fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+                        if (jsonBody) {
+                            // 复杂类型参数 → application/json
+                            fetchOptions.headers = { 'Content-Type': 'application/json', ...headers };
+                            fetchOptions.body = jsonBody;
+                        } else if (rawBody !== null) {
+                            // 端点自行读取 body → 原样发送
+                            fetchOptions.body = rawBody;
+                        } else if (formBody) {
+                            fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded', ...headers };
                             fetchOptions.body = formBody;
+                        } else if (Object.keys(headers).length > 0) {
+                            fetchOptions.headers = headers;
                         }
+                    } else if (Object.keys(headers).length > 0) {
+                        fetchOptions.headers = headers;
                     }
 
                     const res = await fetch(fullUrl, fetchOptions);
@@ -554,19 +672,25 @@ internal static class TestDashboardHtml
         }
 
         // ============================================================
-        // 添加键值对行（Query / Form）
+        // 添加键值对行（Query / Form / Header）
         // ============================================================
         function addKvRow(btn, type) {
-            const section = btn.parentElement.parentElement;
+            addKvRowTo(btn.parentElement.parentElement, type, '', '');
+        }
+
+        // 在指定 section 中追加一行键值对；key/value 非空时用于预填服务端提取的参数。
+        function addKvRowTo(section, type, key, value) {
             const row = document.createElement('div');
             row.className = 'kv-row';
             row.dataset.type = type;
             const keyInput = document.createElement('input');
             keyInput.className = 'kv-key input-param';
             keyInput.placeholder = '参数名';
+            keyInput.value = key || '';
             const valInput = document.createElement('input');
             valInput.className = 'kv-value input-param';
             valInput.placeholder = '值';
+            valInput.value = value || '';
             const removeBtn = document.createElement('button');
             removeBtn.className = 'btn-remove';
             removeBtn.textContent = '✕';
@@ -575,7 +699,7 @@ internal static class TestDashboardHtml
             row.appendChild(valInput);
             row.appendChild(removeBtn);
             section.appendChild(row);
-            keyInput.focus();
+            return row;
         }
 
         // ============================================================

@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Yzl.Extensions.Http.OpenFeign;
+using Yzl.Extensions.Http.OpenFeign.Serializer;
 using Yzl.Extensions.Samples.Cache.Services;
 using Yzl.Extensions.Samples.TestDashboard;
 
@@ -42,7 +44,30 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBatchServices();
 
 // ===================================================================
-// 注册缓存框架（核心步骤，必须在服务注册之后）
+// 注册 OpenFeign（用于第十一章：远程调用 + Cacheable）
+// ===================================================================
+//
+// 扫描 App.Assemblies 中所有标注了 [FeignClient] 的接口，
+// 为其生成动态代理并注册进 DI 容器 —— 之后可以直接注入
+// 接口类型（如 ICacheDemoFeignClient），无需手写 HttpClient。
+//
+// SerializerType：显式指定 JSON 序列化器。不指定时框架会回退到
+// NewtonsoftFeignSerializer；本示例与 OpenFeign 示例项目保持一致，
+// 使用 System.Text.Json。
+//
+// ⚠ 顺序要求：AddFeignStarter 必须在 AddEnableCaching <b>之前</b>调用。
+//   原因见下面的 AddEnableCaching 注释 —— 后者在调用时会扫描
+//   已注册进容器的接口服务，给「注解标在接口方法上」的接口叠加缓存代理；
+//   晚于它注册的接口不会被包住，而且是静默失效。
+// ===================================================================
+builder.Services.AddFeignStarter(builder.Configuration, options =>
+{
+    options.SerializerType = typeof(SystemTextJsonFeignSerializer);
+});
+Console.WriteLine("✓ OpenFeign 已启用（目标：http://localhost:16600）");
+
+// ===================================================================
+// 注册缓存框架（核心步骤，必须最后调用）
 // ===================================================================
 //
 // AddEnableCaching 方法会完成以下工作：
@@ -51,6 +76,13 @@ builder.Services.AddBatchServices();
 //   3. 注册缓存拦截器（Castle DynamicProxy）
 //   4. 注册缓存操作处理器（Cacheable / CachePut / CacheEvict）
 //   5. 自动扫描程序集，为标注了缓存注解的类创建动态代理
+//   6. 扫描「已注册进容器的接口服务」，为注解标在接口方法上的接口
+//      叠一层缓存代理 —— OpenFeign 的客户端接口（如 ICacheDemoFeignClient）
+//      走的就是这条路径，于是 [Cacheable] 可以直接写在接口方法上
+//
+// ⚠ 因为第 6 步依赖「此刻容器里已经有什么」，本方法必须最后调用：
+//     AddBatchServices() → AddFeignStarter(...) → AddEnableCaching(...)
+//   晚于本方法注册的接口不会被包住，且是静默失效。
 //
 // 参数说明：
 //   assemblies: null           → 自动扫描当前应用程序域的所有程序集
@@ -121,7 +153,8 @@ app.MapGet("/", () => new
     description = "演示 Cacheable / CachePut / CacheEvict / SpEL 表达式 / 滑动过期 / Redis 等缓存能力",
     dashboard = "/dashboard",
     apiEndpoint = "/api/samples",
-    note = "访问 /api/samples 可查看所有缓存测试端点。首次调用有模拟耗时（毫秒级），后续命中缓存立即返回"
+    note = "访问 /api/samples 可查看所有缓存测试端点。首次调用有模拟耗时（毫秒级），后续命中缓存立即返回",
+    feignDemo = "第十一章演示 OpenFeign 远程调用 + Cacheable：GET /api/samples/feign/{id}（需先启动 Samples.Api：16600）"
 });
 
 // 测试仪表盘 — 自动发现所有 Controller 路由（通过 [TestDashboardInfo] 特性获取分组名称和排序）
