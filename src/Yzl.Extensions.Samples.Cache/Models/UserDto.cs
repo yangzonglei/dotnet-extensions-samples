@@ -47,3 +47,32 @@ public class OrderDto
     public string Status { get; set; } = string.Empty;
     public DateTime CreateTime { get; set; } = DateTime.Now;
 }
+
+/// <summary>
+/// 用户等级枚举 —— 用于演示「枚举参数参与缓存键」
+/// </summary>
+public enum UserLevel
+{
+    Normal,
+    Silver,
+    Gold,
+}
+
+/// <summary>
+/// 用户权益 DTO —— 结果由 (userId, level) 唯一决定，
+/// 便于观察不同枚举值是否落在不同缓存键上。
+/// </summary>
+public class UserBenefitDto
+{
+    public int UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+
+    /// <summary>枚举原始值（System.Text.Json 默认序列化为数字，故另给出名字字段）</summary>
+    public UserLevel Level { get; set; }
+
+    /// <summary>枚举成员名（与缓存键中使用的字符串一致）</summary>
+    public string LevelName { get; set; } = string.Empty;
+
+    public decimal DiscountRate { get; set; }
+    public string Description { get; set; } = string.Empty;
+}

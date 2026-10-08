@@ -16,6 +16,7 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║  #参数名.属性     → 嵌套属性访问，如 #user.Name           ║
 /// ║  #p0.属性.子属性  → 多级嵌套，如 #qo.User.Name            ║
 /// ║  #字典名.key      → 字典/动态对象属性，如 #cfg.version    ║
+/// ║  #枚举参数        → 枚举参数取 ToString()，即成员名        ║
 /// ║  #result          → 方法返回值（仅 CachePut/Unless 支持） ║
 /// ║  值1:值2          → 组合多个值形成复合键                  ║
 /// ╚══════════════════════════════════════════════════════════════╝
@@ -123,7 +124,8 @@ public class SpelKeyService
     }
 
     // ===================================================================
-    // 示例 3.4: 复合 SpEL 表达式（多条件组合）
+    // 源码示例（无端点，不占用例编号）: 复合 SpEL 表达式（多条件组合）
+    //           ⚠️ 本方法没有对应的 Controller 端点，仅供阅读参考
     // ===================================================================
 
     /// <summary>
@@ -154,7 +156,7 @@ public class SpelKeyService
     }
 
     // ===================================================================
-    // 示例 3.5: 默认方法名作为缓存区域
+    // 示例 3.4: 默认方法名作为缓存区域
     // ===================================================================
 
     /// <summary>
@@ -178,6 +180,49 @@ public class SpelKeyService
         Console.WriteLine($"[SpEL 默认名称] 执行查询：id={id}（使用方法全限定名作为 cacheName）");
         Thread.Sleep(1500);
         return _users.FirstOrDefault(u => u.Id == id);
+    }
+
+    // ===================================================================
+    // 示例 3.5: 枚举参数作为缓存键的一部分
+    // ===================================================================
+
+    /// <summary>
+    /// 【SpEL：枚举参数按「枚举值」区分缓存】
+    ///
+    /// 参数是枚举时，键表达式里直接写参数名即可。SpEL 简单键的解析走
+    /// <c>val?.ToString() ?? ""</c>，枚举的 <c>ToString()</c> 返回<b>成员名</b>：
+    ///   GetUserBenefit(1, UserLevel.Normal) → "spel:benefit:1:Normal"
+    ///   GetUserBenefit(1, UserLevel.Gold)   → "spel:benefit:1:Gold"
+    /// 键不同 → 各枚举值独立缓存，互不命中；同一枚举值重复调用则命中。
+    /// </summary>
+    [Cacheable(cacheName: "spel:benefit", key: "#userId:#level", ttlSeconds: 60)]
+    public virtual UserBenefitDto? GetUserBenefit(int userId, UserLevel level)
+    {
+        _callCount++;
+        Console.WriteLine($"[SpEL 枚举] 执行查询：userId={userId}, level={level}（枚举 ToString → 缓存键后缀）");
+        Thread.Sleep(1500);
+
+        var user = _users.FirstOrDefault(u => u.Id == userId);
+        if (user == null)
+            return null;
+
+        var discount = level switch
+        {
+            UserLevel.Gold => 0.8m,
+            UserLevel.Silver => 0.9m,
+            _ => 1.0m,
+        };
+
+        // 结果只由 (userId, level) 决定，便于观察「首次未命中 / 再次命中」的时延差异。
+        return new UserBenefitDto
+        {
+            UserId = user.Id,
+            UserName = user.Name,
+            Level = level,
+            LevelName = level.ToString(),
+            DiscountRate = discount,
+            Description = $"{user.Name}（{level}）折扣 {discount * 10:0.#} 折"
+        };
     }
 
     // ===================================================================

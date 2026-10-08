@@ -200,7 +200,10 @@ curl -s "http://localhost:16605/api/samples/lifecycle/refresh/1" | jq '{elapsedM
 | 3.2 | `GET /api/samples/spel/config` | `#cfg.site_name:#cfg.version` | `Dictionary` 索引式访问 |
 | 3.3 | `GET /api/samples/spel/positional/1` | `#p0` | 位置参数 `#p0` / `#p1` |
 | 3.4 | `GET /api/samples/spel/default-name/1` | `#id`（无 `cacheName`） | 未指定 `cacheName` 时走默认区域 |
-| 3.5 | `GET /api/samples/spel/sliding-redis/1` | `#id` + `slidingTtl` + `CacheType.Redis` | SpEL + 滑动 + Redis 组合 |
+| 3.5 | `GET /api/samples/spel/benefit/1/Normal` | `#userId:#level` | **枚举参数**按枚举值区分缓存 |
+| 3.6 | `GET /api/samples/spel/sliding-redis/1` | `#id` + `slidingTtl` + `CacheType.Redis` | SpEL + 滑动 + Redis 组合 |
+
+> 编号规则：一节的编号与**端点**一一对应（`SpelKeyService.SearchUsers` 的复合键示例只有源码、没有端点，故不占编号）。
 
 ```bash
 # 3.1 对象属性拼键：不同 keyword 命中不同缓存
@@ -218,9 +221,43 @@ curl -s "http://localhost:16605/api/samples/spel/positional/1" | jq '{cacheKey, 
 # 3.4 默认 cacheName
 curl -s "http://localhost:16605/api/samples/spel/default-name/1" | jq
 
-# 3.5 SpEL + 滑动 + Redis（需启用 Redis）
+# 3.5 枚举参数参与拼键（详见下节）
+curl -s "http://localhost:16605/api/samples/spel/benefit/1/Normal" | jq '{cacheKey, elapsedMs}'
+
+# 3.6 SpEL + 滑动 + Redis（需启用 Redis）
 curl -s "http://localhost:16605/api/samples/spel/sliding-redis/1" | jq
 ```
+
+### 3.5 枚举参数：能否按枚举值命中缓存？
+
+**结论：可以。** 缓存键由 `SpelKeyParser.ResolveValue` 解析，简单键走
+`val?.ToString() ?? ""`，枚举的 `ToString()` 返回**成员名**：
+
+| 调用 | 缓存键 |
+|------|--------|
+| `GetUserBenefit(1, UserLevel.Normal)` | `spel:benefit:1:Normal` |
+| `GetUserBenefit(1, UserLevel.Gold)` | `spel:benefit:1:Gold` |
+
+两个枚举成员的键不同 → 各自独立缓存，互不命中；同一枚举值重复调用 → 命中。
+
+```bash
+# Normal：首次未命中（~1500ms），二次命中（~0ms）
+curl -s "http://localhost:16605/api/samples/spel/benefit/1/Normal" | jq '{cacheKey, elapsedMs, callCount}'
+curl -s "http://localhost:16605/api/samples/spel/benefit/1/Normal" | jq '{cacheKey, elapsedMs, callCount}'
+# 同 userId 换枚举值 → 不同键 → 重新执行
+curl -s "http://localhost:16605/api/samples/spel/benefit/1/Gold" | jq '{cacheKey, elapsedMs, callCount}'
+# 回到 Normal → 仍命中，说明各枚举值的缓存互不干扰
+curl -s "http://localhost:16605/api/samples/spel/benefit/1/Normal" | jq '{cacheKey, elapsedMs, callCount}'
+# 同枚举值换 userId → 也是不同键 → 重新执行
+curl -s "http://localhost:16605/api/samples/spel/benefit/2/Gold" | jq '{cacheKey, elapsedMs, callCount}'
+```
+
+> ⚠️ 解析用的是 `ToString()`。若给枚举成员加了 `[EnumMember]` / `[JsonStringEnumMemberName]`
+> 或重写了 `ToString`，键里存的是显示名而非成员名 —— 结论不变，只要
+> 「不同枚举值 → 不同 ToString 结果」仍成立。
+>
+> 另外，枚举成员名若含 `:`，会与键的分隔符混淆（`ToString` 结果原样拼接），
+> 命名时需避开。
 
 ---
 
@@ -625,7 +662,7 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 ./src/Yzl.Extensions.Samples.Cache/test.sh
 ```
 
-覆盖范围：第一 / 二 / 四 / 六 / 九 / 十一章。脚本自行拉起服务（端口 16605），
+覆盖范围：第一 / 二 / 三（枚举）/ 四 / 六 / 九 / 十一章。脚本自行拉起服务（端口 16605），
 退出时 `trap` 清理。
 
 > ⚠️ **第十一章需要 `Samples.Api`（16600）同时在运行**，否则该章打印
@@ -636,8 +673,8 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 > ./src/Yzl.Extensions.Samples.Cache/test.sh
 > ```
 >
-> 两个服务都起来时预期：**23 passed, 0 failed**。
-> 仅 Cache 单独跑时：**19 passed, 0 failed**（跳过第十一章的 4 条）。
+> 两个服务都起来时预期：**28 passed, 0 failed**。
+> 仅 Cache 单独跑时：**24 passed, 0 failed**（跳过第十一章的 4 条）。
 
 **脚本的几个关键设计**（读代码前先了解，否则容易误判为 bug）：
 
@@ -645,6 +682,7 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 |------|------|
 | 就绪探测用 `/` 而非 `/basic/1` | 用 `/basic/1` 探测会预热缓存，导致「1.1 首次未命中」失败 |
 | 第十一章用 `FEIGN_ID=$(date +%s)` | 同一进程内重复跑脚本时，固定 id 的缓存还在，「首次未命中」会假性失败 |
+| 3.5 用固定 `userId=1` | 服务每次由脚本全新拉起，进程内缓存为空，固定 key 不会让「首次未命中」假性失败 |
 | 11.2 用响应内容而非耗时判定 | ping 只有几十毫秒，耗时分不出「真实远程」与「缓存命中」 |
 | 第十一章整体包在 `if curl ... 16600` 里 | 下游未启动时降级为 SKIP，不拖垮其余用例 |
 
@@ -668,6 +706,8 @@ chmod +x src/Yzl.Extensions.Samples.Cache/test.sh
 | 3.2 | `spel/config` | | | |
 | 3.3 | `spel/positional/1` | | | |
 | 3.4 | `spel/default-name/1` | | | |
+| 3.5 | `spel/benefit/1/Normal` | | | |
+| 3.5 | `spel/benefit/1/Gold`（同 userId 换枚举值） | | | |
 | 4.1 | `condition/cacheable/99` | | | |
 | 4.1 | `condition/cacheable/5`（永不缓存） | | | |
 | 4.2 | `condition/unless/1` | | | |

@@ -114,6 +114,17 @@ assert_timing "4.8 typo-condition"   "$(ms $HOST/condition/typo-condition/1)" mi
 assert_timing "4.9 typo-unless"      "$(ms $HOST/condition/typo-unless/1)"    miss
 
 echo ""
+echo "===== 第三章：SpEL 枚举参数 ====="
+# 服务每次由脚本全新拉起，进程内缓存为空，固定 userId 不会让「首次未命中」假性失败
+assert_timing "3.5 Normal 首次未命中" "$(ms $HOST/spel/benefit/1/Normal)" miss
+assert_timing "3.5 Normal 二次命中"   "$(ms $HOST/spel/benefit/1/Normal)" hit
+# 同 userId 换枚举值 → 不同缓存键 → 必须重新执行
+assert_timing "3.5 换枚举值 Gold 未命中(不同键)" "$(ms $HOST/spel/benefit/1/Gold)" miss
+assert_timing "3.5 Gold 二次命中"                "$(ms $HOST/spel/benefit/1/Gold)" hit
+# 回到 Normal：各枚举值互不干扰
+assert_timing "3.5 回 Normal 仍命中(未被 Gold 冲掉)" "$(ms $HOST/spel/benefit/1/Normal)" hit
+
+echo ""
 echo "===== 第六章：异步缓存 ====="
 assert_timing "6.1 首次未命中" "$(ms $HOST/async/1)" miss
 assert_timing "6.1 二次命中"   "$(ms $HOST/async/1)" hit

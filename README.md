@@ -219,7 +219,7 @@ dotnet run --project src/Yzl.Extensions.Samples.Cache
 | 基础 Cacheable | `Services/BasicCacheService.cs` |
 | CachePut / CacheEvict 生命周期 | `Services/CacheLifecycleService.cs` |
 | 批量清除缓存 | `Services/CacheEvictAllService.cs` |
-| SpEL 表达式键 | `Services/SpelKeyService.cs` |
+| SpEL 表达式键（含枚举参数按枚举值区分缓存） | `Services/SpelKeyService.cs` |
 | Condition / Unless 条件缓存 | `Services/ConditionalService.cs` |
 | CacheConfig 类级别配置继承 | `Services/ConfigInheritanceService.cs` |
 | 异步方法缓存 | `Services/AsyncCacheService.cs` |

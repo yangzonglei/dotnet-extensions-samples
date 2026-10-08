@@ -166,6 +166,7 @@ public class HomeController : ControllerBase
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/query?userId=1&keyword=test'>/api/samples/spel/query</a> <span class='desc'>嵌套属性访问 #qo.UserId:#qo.Keyword</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/config'>/api/samples/spel/config</a> <span class='desc'>字典键访问 #cfg.site_name:#cfg.version</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/positional/1'>/api/samples/spel/positional/{id}</a> <span class='desc'>位置参数 #p0</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/benefit/1/Gold'>/api/samples/spel/benefit/{userId}/{level}</a> <span class='badge memory'>enum</span> <span class='desc'>枚举参数按枚举值区分缓存（#userId:#level）</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/default-name/1'>/api/samples/spel/default-name/{id}</a> <span class='desc'>默认方法全限定名作为 cacheName</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/spel/sliding-redis/1'>/api/samples/spel/sliding-redis/{id}</a> <span class='badge redis'>Redis</span> <span class='desc'>SpEL + Redis + 滑动过期组合</span></li>
         </ul>

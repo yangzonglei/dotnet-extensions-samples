@@ -106,9 +106,38 @@ public class SpelKeyController : ControllerBase
     }
 
     /// <summary>
-    /// 【3.5】SpEL + Redis + 滑动过期组合
+    /// 【3.5】SpEL + 枚举参数：按枚举值区分缓存
     /// </summary>
-    [Description("【3.5】SpEL + Redis + 滑动过期组合")]
+    [Description("【3.5】枚举参数参与缓存键 #userId:#level（不同枚举值 → 不同键）")]
+    [HttpGet("spel/benefit/{userId}/{level}")]
+    public IActionResult SpelEnumKey(int userId, UserLevel level = UserLevel.Normal)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var benefit = _spelKey.GetUserBenefit(userId, level);
+        sw.Stop();
+
+        var levelName = level.ToString();
+
+        // 与框架内部生成规则一致（cacheName + ":" + "#userId:#level" 的 SpEL 解析结果），
+        // 便于直观对比「不同枚举值 → 不同缓存键」。
+        var cacheKey = $"spel:benefit:{userId}:{levelName}";
+
+        return Ok(new
+        {
+            data = benefit,
+            elapsedMs = sw.ElapsedMilliseconds,
+            callCount = _spelKey.CallCount,
+            levelName,
+            cacheKey,
+            spelExpression = "#userId:#level",
+            note = "枚举参数经 ToString() 解析为成员名；同一 userId 下不同枚举值落在不同缓存键，互不命中"
+        });
+    }
+
+    /// <summary>
+    /// 【3.6】SpEL + Redis + 滑动过期组合
+    /// </summary>
+    [Description("【3.6】SpEL + Redis + 滑动过期组合")]
     [HttpGet("spel/sliding-redis/{id}")]
     public IActionResult SpelSlidingRedis(int id)
     {
