@@ -1,6 +1,7 @@
 using System.Text;
 using NLog.Web;
 using Yzl.Extensions.Samples.OpenFeign.AOT.Acs;
+using Yzl.Extensions.Samples.OpenFeign.AOT.Acs.FallbackHandler;
 using Yzl.Extensions.Samples.OpenFeign.AOT.FeignImpl;
 
 using Samples.Models;
@@ -43,6 +44,8 @@ app.MapGet("/", () => new
         "/demo/methods",
         "/demo/body",
         "/demo/advanced",
+        "/demo/fallback/task",
+        "/demo/fallback/factory",
         "/demo/sse",
         "/read-all",
         "/download-async",
@@ -104,6 +107,59 @@ app.MapGet("/demo/advanced", async (IDemoFeignClient client) => new
     rawFormatTrue = await client.GetWrappedRaw(7),
     customResolver = await client.GetStatusResult(8),
     timeoutFallback = client.TimeoutWithFallback()
+});
+
+// 【12.1】Task 返回值降级（fallback）
+//
+// 上游 /api/timeout 睡 3 秒，本客户端的客户端级超时 2 秒 —— 降级必然触发，
+// 因而也不依赖「上游挂掉」这种前置条件。
+//
+// ⚠️ 注意超时写在客户端级：AOT 源生成器只读 [FeignClient(timeout: …)]，
+//    方法级 [Get(..., timeout: …)] 会被静默忽略。
+//
+// AOT（源生成器）形态下，降级由生成的代理负责：
+// 代理里应有 catch (Exception ex) → _fallback?.… 分支，
+// Task 形态的方法体应为 async + await。
+app.MapGet("/demo/fallback/task", async (IDemoFeignClient client) =>
+{
+    var asyncResult = await client.TimeoutWithFallbackAsync();
+    var syncResult = client.TimeoutWithFallback();
+
+    return new
+    {
+        syncResult,
+        asyncResult,
+        syncDegraded = syncResult == "fallback timeout",
+        asyncDegraded = asyncResult == "fallback timeout (async)",
+        operation = "OpenFeign AOT 超时降级（fallback）",
+        chain = "Program.cs → IDemoFeignClient(fallback) → Samples.Api(/api/timeout, 睡 3s / 客户端超时 2s)",
+        note = "同步与异步两条路径都应由 DemoFeignClientFallback 兜底；"
+             + "若 asyncResult 抛 FeignClientException，说明源生成代理的异步降级未生效"
+    };
+});
+
+// 【12.2】降级工厂（fallbackFactory，带失败原因）
+//
+// 另一个 Feign 客户端 IDemoFeignClientFactory，声明的是 fallbackFactory 而不是 fallback。
+// 两者互斥，所以必须单独开接口。
+// 工厂类型与 IFeignFallbackFactory<IDemoFeignClientFactory> → 具体工厂 的接口映射，
+// 都由 AddGeneratedFeignClients() 自动注册，样例侧无需手写任何 DI 代码。
+app.MapGet("/demo/fallback/factory", async (IDemoFeignClientFactory client) =>
+{
+    var asyncResult = await client.TimeoutWithFallbackAsync();
+    var syncResult = client.TimeoutWithFallback();
+
+    return new
+    {
+        syncResult,
+        asyncResult,
+        degraded = syncResult == "factory fallback" && asyncResult == "factory fallback (async)",
+        // 工厂在 Create(cause) 里拿到了失败原因，静态留存给本端点展示
+        degradeReason = DemoFeignClientFallbackFactory.LastCause,
+        operation = "OpenFeign AOT 超时降级（fallbackFactory）",
+        chain = "Program.cs → IDemoFeignClientFactory(fallbackFactory) → Samples.Api(/api/timeout, 睡 3s / 客户端超时 2s)",
+        note = "同步与异步都会走工厂；degradeReason 是 Create(cause) 收到异常链的最内层"
+    };
 });
 
 app.MapGet("/demo/sse", async (ISseDemoFeignClient client, CancellationToken cancellationToken) =>

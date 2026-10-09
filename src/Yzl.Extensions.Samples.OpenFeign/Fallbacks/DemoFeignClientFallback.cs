@@ -36,4 +36,7 @@ public sealed class DemoFeignClientFallback : IDemoFeignClient
     public Task<object> Trace() => Task.FromResult<object>(new { method = "TRACE", fallback = true });
 
     public string TimeoutWithFallback() => "fallback timeout";
+
+    // 异步降级：文案刻意与同步版不同，便于一眼区分走的是哪条路径
+    public Task<string> TimeoutWithFallbackAsync() => Task.FromResult("fallback timeout (async)");
 }
