@@ -1,18 +1,18 @@
 <Project>
     <ItemGroup>
         <!-- Yzl.Extensions 自有包 -->
-        <PackageVersion Include="Yzl.Extensions.Cache" Version="0.1.3"/>
-        <PackageVersion Include="Yzl.Extensions.Core" Version="1.0.0"/>
-        <PackageVersion Include="Yzl.Extensions.Actuator" Version="0.1.9"/>
-        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign" Version="0.1.21"/>
-        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Abstractions" Version="1.0.1"/>
-        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.AOT" Version="0.1.3"/>
-        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Net48" Version="0.1.1"/>
-        <PackageVersion Include="Yzl.Extensions.SpringBoot.Admin.Client.Net" Version="0.1.9"/>
         <PackageVersion Include="Yzl.Extensions.Common" Version="0.1.4"/>
+        <PackageVersion Include="Yzl.Extensions.Core" Version="1.0.0"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Abstractions" Version="1.0.1"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign" Version="0.1.21"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.AOT" Version="0.1.3"/>
+        <PackageVersion Include="Yzl.Extensions.Http.OpenFeign.Net48" Version="0.1.2"/>
+        <PackageVersion Include="Yzl.Extensions.Actuator" Version="0.1.9"/>
+        <PackageVersion Include="Yzl.Extensions.SpringBoot.Admin.Client.Net" Version="0.1.9"/>
         <PackageVersion Include="Yzl.Extensions.AI.Mcp" Version="0.1.0"/>
-        <PackageVersion Include="Yzl.Extensions.Sentinel" Version="0.1.0"/>
-        <PackageVersion Include="Yzl.Extensions.Sentinel.DataSource.Nacos" Version="0.1.0"/>
+        <PackageVersion Include="Yzl.Extensions.Sentinel" Version="0.1.1"/>
+        <PackageVersion Include="Yzl.Extensions.Sentinel.DataSource.Nacos" Version="0.1.1"/>
+        <PackageVersion Include="Yzl.Extensions.Cache" Version="0.1.3"/>
 
         <!-- 基础设施 -->
         <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1"/>

@@ -13,7 +13,7 @@
       默认使用 NuGet 包引用（面向使用者/发布场景）。
       开发者设置 -p:UseProjectReference=true 可切换为源码引用（需 ../dotnet-extensions 存在）。
     -->
-    <UseProjectReference Condition="'$(UseProjectReference)' == ''">true</UseProjectReference>
+    <UseProjectReference Condition="'$(UseProjectReference)' == ''">false</UseProjectReference>
   </PropertyGroup>
 
   <!-- .NET 4.8 项目特殊处理 -->
