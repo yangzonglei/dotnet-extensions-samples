@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Yzl.Extensions.Samples.Cache.Managers;
 using Yzl.Extensions.Samples.Cache.Services;
 using Yzl.Extensions.Samples.TestDashboard;
 
@@ -20,8 +21,10 @@ public class HomeController : ControllerBase
     private readonly AsyncCacheService _async;
     private readonly SlidingExpirationService _sliding;
     private readonly RedisCacheService _redis;
+    private readonly DefaultBackendCacheService _defaultBackend;
     private readonly CacheEvictAllService _evictAll;
     private readonly FeignCacheService _feign;
+    private readonly CacheConnectionService _connection;
 
     public HomeController(
         BasicCacheService basicCache,
@@ -32,8 +35,10 @@ public class HomeController : ControllerBase
         AsyncCacheService async,
         SlidingExpirationService sliding,
         RedisCacheService redis,
+        DefaultBackendCacheService defaultBackend,
         CacheEvictAllService evictAll,
-        FeignCacheService feign)
+        FeignCacheService feign,
+        CacheConnectionService connection)
     {
         _basicCache = basicCache;
         _lifecycle = lifecycle;
@@ -43,8 +48,10 @@ public class HomeController : ControllerBase
         _async = async;
         _sliding = sliding;
         _redis = redis;
+        _defaultBackend = defaultBackend;
         _evictAll = evictAll;
         _feign = feign;
+        _connection = connection;
     }
 
     /// <summary>
@@ -85,8 +92,11 @@ public class HomeController : ControllerBase
             async_calls = _async.CallCount,
             sliding_calls = _sliding.CallCount,
             redis_calls = _redis.CallCount,
+            defaultBackend_calls = _defaultBackend.CallCount,
             evictAll_calls = _evictAll.CallCount,
             feign_calls = _feign.CallCount,
+            connection_calls = _connection.CallCount,
+            connection_injected_connectCount = Managers.SamplesInjectedConnectionSource.ConnectCount,
             tip = "调用统计计数的是实际执行的方法次数（不含缓存命中的请求），用于验证缓存命中率"
         });
     }
@@ -222,6 +232,8 @@ public class HomeController : ControllerBase
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/redis/sliding/1'>/api/samples/redis/sliding/{id}</a> <span class='badge redis'>Redis</span> <span class='desc'>Redis + 滑动过期</span></li>
             <li><span class='endpoint post'>POST</span> /api/samples/redis/update <span class='badge redis'>Redis</span> <span class='desc'>Redis CachePut</span></li>
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/redis/memory/1'>/api/samples/redis/memory/{id}</a> <span class='badge memory'>Memory</span> <span class='desc'>Memory vs Redis 对比</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/redis/multi/1'>/api/samples/redis/multi/{id}</a> <span class='badge redis'>Redis</span> <span class='desc'>一个项目两个 Redis 后端（db 11 + db 12，两套序列化器）</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/redis/default-backend/1001'>/api/samples/redis/default-backend/{id}</a> <span class='badge redis'>Redis</span> <span class='desc'>Service 级默认后端（自定义 db 1）+ 方法级覆盖（db 2 / 内存）；id 取 1000~1999</span></li>
         </ul>
     </div>
 
@@ -231,6 +243,18 @@ public class HomeController : ControllerBase
             <li><span class='endpoint get'>GET</span> <a href='/api/samples/evict-all/1'>/api/samples/evict-all/{id}</a> <span class='desc'>查询用户（写入缓存）</span></li>
             <li><span class='endpoint post'>POST</span> /api/samples/evict-all/evict-single/{id} <span class='desc'>逐条清除缓存</span></li>
             <li><span class='endpoint post'>POST</span> /api/samples/evict-all/clear-all <span class='desc'>批量清除整个缓存区域</span></li>
+        </ul>
+    </div>
+
+    <h2>📖 第十章：Redis 连接（配置 / 注入 / 高可用）</h2>
+    <div class='section'>
+        <ul>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/config/2001'>/api/samples/connection/config/{id}</a> <span class='badge redis'>Config</span> <span class='desc'>连接来自 <code>spring:data:redis</code> 配置节（一行子类，只换连接名）→ db 5；id 取 2000~2999</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/injected/2001'>/api/samples/connection/injected/{id}</a> <span class='badge redis'>@Bean</span> <span class='desc'>连接由用户自己建并注入（<code>IRedisConnectionSource</code>）→ 落到 db 8，配置里写的 7 被跳过</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/injected-connection-count'>/api/samples/connection/injected-connection-count</a> <span class='badge diag'>证据</span> <span class='desc'>「同一个连接名只建一次」：建连计数器应稳定在 1</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/options'>/api/samples/connection/options</a> <span class='badge diag'>配置</span> <span class='desc'>客户端自己用 <code>[ConfigurationProperties]</code> 读配置；并打印「连接名冒号 = 配置层级」这个坑</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/ha/2001'>/api/samples/connection/ha/{id}</a> <span class='badge async'>HA</span> <span class='desc'>连接层高可用：杀 Redis → 不 500（降级）→ 起回来能自愈，不用重启宿主</span></li>
+            <li><span class='endpoint get'>GET</span> <a href='/api/samples/connection/names'>/api/samples/connection/names</a> <span class='badge diag'>对照</span> <span class='desc'>连接名一览 + 四级查找顺序（用户来源优先于配置）</span></li>
         </ul>
     </div>
 
@@ -246,7 +270,7 @@ public class HomeController : ControllerBase
             <br/>
             与 Java/Spring 写法一致：注解直接标在 OpenFeign 接口方法上即可生效，命中时 HTTP 请求根本不会发出（看 elapsedMs 判断）。
             <br/>
-            ℹ️ 该注解未指定 cacheType，默认是 <b>Memory</b>（进程内），服务重启即失效 —— 想要跨进程请显式写 <code>cacheType: CacheType.Redis</code>。
+            ℹ️ 该注解未指定 cacheManager，默认走 <b>MemoryCacheManager</b>（进程内），服务重启即失效 —— 想要跨进程请显式写 <code>cacheManager: typeof(RedisCacheManager)</code>。
         </p>
     </div>
 

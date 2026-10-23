@@ -5,7 +5,8 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// <summary>
 /// 【Redis 缓存 —— 使用 Redis 作为缓存后端】
 ///
-/// 框架支持 Memory 和 Redis 两种缓存后端，通过 cacheType 参数切换。
+/// 框架自带内存后端，Redis 后端由 Yzl.Extensions.Cache.Redis 包提供。
+/// 后端通过注解上的 cacheManager: typeof(XxxCacheManager) 参数切换。
 ///
 /// ╔══════════════════════════════════════════════════════════════════════╗
 /// ║  Memory vs Redis 对比                                              ║
@@ -27,9 +28,15 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ╚══════════════════════════════════════════════════════════════════════╝
 ///
 /// ⚠️ 使用 Redis 缓存需要：
-///   1. 在 appsettings.Development.json 中配置 Redis 连接字符串
-///   2. 在 Program.cs 中调用 AddEnableCaching(enableRedis: true, ...)
-///   3. 在 [Cacheable] 上设置 cacheType: CacheType.Redis
+///   1. 提供名为 redis:main-site 的 Redis 连接，两条路任选其一：
+///      ① appsettings.Development.json 里写扁平连接串键 "redis:main-site": "host:port,..."（本章 8.1~8.6 走这条）
+///      ② appsettings.json 的 spring:data:redis 结构化节（按连接名嵌套，见第十章 10.1）
+///   2. 项目引用 Yzl.Extensions.Cache.Redis 包 —— 引用即自动注册，无需任何注册调用
+///   3. 在 [Cacheable] 上设置 cacheManager: typeof(RedisCacheManager)
+///
+/// 两条路都没配、或 Redis 不可达时【不会 500】，而是全部静默不命中
+/// （elapsedMs 恒为「真实方法耗时」，样例里是 ~1500ms，且连接不可达时还会叠加
+/// connect-timeout × connect-retry 的重试时间）—— 详见 TestManual.md §0「关于 Redis」。
 /// </summary>
 [IocService(lifetime: ServiceLifetime.Transient)]
 public class RedisCacheService
@@ -53,7 +60,7 @@ public class RedisCacheService
     /// <summary>
     /// 【基础 Redis 缓存】
     ///
-    /// 使用 cacheType: CacheType.Redis 将缓存存储到 Redis。
+    /// 使用 cacheManager: typeof(RedisCacheManager) 将缓存存储到 Redis。
     /// 其他所有特性（SpEL、TTL、Condition 等）与 Memory 缓存完全一致。
     ///
     /// 缓存键在 Redis 中的存储格式：
@@ -66,7 +73,7 @@ public class RedisCacheService
     ///   > get redis:users:1
     ///   > ttl redis:users:1
     /// </summary>
-    [Cacheable(cacheName: "redis:users", key: "#id", ttlSeconds: 300, cacheType: CacheType.Redis)]
+    [Cacheable(cacheName: "redis:users", key: "#id", ttlSeconds: 300, cacheManager: typeof(RedisCacheManager))]
     public virtual UserDto? GetUser(int id)
     {
         _callCount++;
@@ -95,7 +102,7 @@ public class RedisCacheService
     ///   - 分布式锁状态
     /// </summary>
     [Cacheable(cacheName: "redis:sliding", key: "#id", ttlSeconds: 86400, slidingTtl: 300,
-               cacheType: CacheType.Redis)]
+               cacheManager: typeof(RedisCacheManager))]
     public virtual UserDto? GetUserSliding(int id)
     {
         _callCount++;
@@ -119,7 +126,7 @@ public class RedisCacheService
     ///   保证了多实例间的缓存一致性
     /// </summary>
     [CachePut(cacheName: "redis:users", key: "#user.Id", ttlSeconds: 300,
-              cacheType: CacheType.Redis)]
+              cacheManager: typeof(RedisCacheManager))]
     public virtual UserDto? UpdateUser(UserDto user)
     {
         _callCount++;
@@ -148,7 +155,7 @@ public class RedisCacheService
     ///
     /// 从 Redis 中删除指定缓存条目。
     /// </summary>
-    [CacheEvict(cacheName: "redis:users", key: "#id", cacheType: CacheType.Redis)]
+    [CacheEvict(cacheName: "redis:users", key: "#id", cacheManager: typeof(RedisCacheManager))]
     public virtual void DeleteUser(int id)
     {
         _callCount++;
@@ -177,7 +184,7 @@ public class RedisCacheService
     ///
     /// 本方法使用 Memory 缓存（默认），与上面的 Redis 方法形成对比。
     /// </summary>
-    [Cacheable(cacheName: "memory:users", key: "#id", ttlSeconds: 60, cacheType: CacheType.Memory)]
+    [Cacheable(cacheName: "memory:users", key: "#id", ttlSeconds: 60)]
     public virtual UserDto? GetUserFromMemory(int id)
     {
         _callCount++;

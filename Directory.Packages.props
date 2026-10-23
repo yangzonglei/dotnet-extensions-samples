@@ -1,7 +1,8 @@
 <Project>
     <ItemGroup>
         <!-- Yzl.Extensions 自有包 -->
-        <PackageVersion Include="Yzl.Extensions.Cache" Version="0.1.3"/>
+        <PackageVersion Include="Yzl.Extensions.Cache" Version="0.2.0"/>
+        <PackageVersion Include="Yzl.Extensions.Cache.Redis" Version="0.2.0"/>
         <PackageVersion Include="Yzl.Extensions.Core" Version="1.0.0"/>
         <PackageVersion Include="Yzl.Extensions.Actuator" Version="0.1.9"/>
         <PackageVersion Include="Yzl.Extensions.Http.OpenFeign" Version="0.1.20"/>
