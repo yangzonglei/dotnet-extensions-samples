@@ -205,7 +205,7 @@ dotnet run --project src/Yzl.Extensions.Samples.OpenFeign.AOT
 
 端口 **16605** — 演示 [Yzl.Extensions.Cache](https://www.nuget.org/packages/Yzl.Extensions.Cache) 缓存框架的全部特性。
 
-**涉及 NuGet 包：** `Yzl.Extensions.Cache`、`Yzl.Extensions.Http.OpenFeign`（第十一章远程调用）
+**涉及 NuGet 包：** `Yzl.Extensions.Cache`、`Yzl.Extensions.Cache.Redis`（第八章 Redis 后端）、`Yzl.Extensions.Http.OpenFeign`（第十一章远程调用）
 
 **启动：**
 ```bash
@@ -225,12 +225,40 @@ dotnet run --project src/Yzl.Extensions.Samples.Cache
 | 异步方法缓存 | `Services/AsyncCacheService.cs` |
 | 滑动过期策略 | `Services/SlidingExpirationService.cs` |
 | Redis 后端缓存 | `Services/RedisCacheService.cs` |
+| 一个项目多个 Redis 后端（不同实例/索引 + 不同序列化器） | `Managers/CasAuthRedisManager.cs`、`Services/MultiRedisCacheService.cs` |
+| Service 级默认后端 + 方法级覆盖（类级 `[CacheConfig]` 指定自定义 db 1，方法 B 覆盖为 db 2、方法 C 覆盖为内存） | `Managers/Db1RedisManager.cs`、`Managers/Db2RedisManager.cs`、`Services/DefaultBackendCacheService.cs` |
 | OpenFeign + Cacheable（远程调用结果缓存） | `Feign/ICacheDemoFeignClient.cs`、`Services/FeignCacheService.cs` |
+| Redis 连接来自配置节 `spring:data:redis`（一行子类只换连接名） | `Managers/ConfigBackendRedisManager.cs`、`Services/CacheConnectionService.cs` |
+| Redis 连接由用户自己建并注入（`IRedisConnectionSource` + 不继承基类的 `ICacheManager`，只创建一次） | `Managers/SamplesInjectedConnectionSource.cs`、`Managers/InjectedConnectionCacheManager.cs` |
+| 客户端用 `[ConfigurationProperties("spring:data:redis")]` 自读 Redis 配置 | `Configuration/SamplesRedisConfig.cs` |
+| 连接层高可用（Redis 抖动后自愈，不用重启宿主） | `Controllers/CacheConnectionController.cs`（10.5） |
 
 > 服务通过 `[IocService]` 特性 + `AddBatchServices()` 批量扫描注册（而非逐个手写 `AddTransient<T>()`）。
 > 缓存注解依赖 Castle DynamicProxy，**被注解的方法必须是 `virtual`**，
 > 或**把注解读在接口方法上**（第十一章的 `ICacheDemoFeignClient` 即后者，接口由 OpenFeign 注册进 DI，无需实现类）。
-> Redis 是否启用由配置项 `redis:main-site` 决定（未配置时仅内存缓存，第八章端点不可用）。
+> Redis 后端由 `Yzl.Extensions.Cache.Redis` 包提供：**引用即生效**，无需任何注册调用。
+> 后端选择在注解上（`cacheManager: typeof(RedisCacheManager)`），连接首次使用时才建立。
+> ⚠️ **缺连接配置时不会 500，而是缓存静默失效**：解析连接抛出的异常会被读路径
+> （`CacheableHandler.TryReadCache`）与写路径（`CacheOperationHelper.WriteCache`）的 `catch (Exception)`
+> 吞掉，表现是「每次都是方法体耗时」（本样例里 `elapsedMs` 恒 ~1500 —— Redis **不可达**时还会
+> 多一段 `connect-timeout × connect-retry` 的重试时间，量级仍是秒），HTTP 仍是 200。
+> 唯一会 500 的是「注解里 `cacheManager` 写的类型没注册」——那是 `InvalidOperationException`，
+> 会穿透 `CacheOperationDispatcher` 的降级过滤器。
+> **连接从哪来（第十章，两条路可混用）**：① 配置 —— 子类只重写 `ConnectionStringKey`，
+> 其余参数（host / port / database / 超时 / 心跳 / 重试 / client-name）全在
+> `appsettings.json` 的 `spring:data:redis` 节里，**按连接名嵌套**（连接名里的冒号是配置层级分隔符，
+> 所以只能写成嵌套对象，且运行期要按**配置节路径**读，不能按字典全名取）；
+> ② 用户注入 —— 注册一个 `IRedisConnectionSource` 认领连接名，由它自己建连接，
+> 这条路径**优先于配置**（认领了就不读配置）。既有扁平连接串键（`redis:main-site` 等）
+> 仍然有效，两种形态共存。
+> **同一项目要挂多个 Redis 后端**：继承 `RedisCacheManager`，覆盖 `ConnectionStringKey` /
+> `DatabaseIndex` / `Serializer` / `AllowNullValues` 四个重写点，再在注解上写自己的 `typeof(...)`（第八章 8.5 即此用法）。
+> 如果只是想换库索引，**不必新增连接串** —— 只重写 `DatabaseIndex` 即可，代码里给了值就会
+> 覆盖连接串的 `defaultDatabase`（第八章 8.6 的 `Db1RedisManager` / `Db2RedisManager` 就是
+> 两行 `protected override int? DatabaseIndex => n;`，与基类共享同一个连接）。
+> 子类**继承即注册**：`AddEnableCaching(assemblies: ...)` 会扫描范围内所有具体的 `ICacheManager`
+> 实现并自动注册为单例，`sealed` 子类、手写实现接口的类型都一样 —— `[IocService]` 与
+> `Program.cs` 里的手写注册都不需要（若确实要别的生命周期，在 `AddEnableCaching` 之前显式注册，显式优先）。
 > 注册顺序有硬约束：`AddBatchServices()` → `AddFeignStarter(...)` → `AddEnableCaching(...)`，
 > **`AddEnableCaching` 必须最后调用**（它要扫描容器里已注册的接口服务；晚注册的接口静默失效）。
 > 第十一章需先启动 `Samples.Api`（16600）。

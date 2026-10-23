@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Yzl.Extensions.Cache.Redis;
 using Yzl.Extensions.Http.OpenFeign;
 using Yzl.Extensions.Http.OpenFeign.Serializer;
+using Yzl.Extensions.Samples.Cache.Managers;
 using Yzl.Extensions.Samples.Cache.Services;
 using Yzl.Extensions.Samples.TestDashboard;
 
@@ -71,8 +73,10 @@ Console.WriteLine("✓ OpenFeign 已启用（目标：http://localhost:16600）"
 // ===================================================================
 //
 // AddEnableCaching 方法会完成以下工作：
-//   1. 注册 MemoryCache（内存缓存提供器）
-//   2. 如果 enableRedis = true，注册 RedisCacheProvider
+//   1. 注册 MemoryCache（框架自带的内存后端，即默认的 MemoryCacheManager）
+//   2. 扫描并执行各后端包提供的 ICacheServiceConfigurator（v0.2.0 起的自注册入口）——
+//      本项目引用了 Yzl.Extensions.Cache.Redis，于是 RedisCacheManager 在这里被注册。
+//      「引用即生效」：不需要任何 AddRedisCache() 调用，也不需要给本方法传参数。
 //   3. 注册缓存拦截器（Castle DynamicProxy）
 //   4. 注册缓存操作处理器（Cacheable / CachePut / CacheEvict）
 //   5. 自动扫描程序集，为标注了缓存注解的类创建动态代理
@@ -85,37 +89,51 @@ Console.WriteLine("✓ OpenFeign 已启用（目标：http://localhost:16600）"
 //   晚于本方法注册的接口不会被包住，且是静默失效。
 //
 // 参数说明：
-//   assemblies: null           → 自动扫描当前应用程序域的所有程序集
-//   enableRedis: false         → 不启用 Redis（仅使用内存缓存）
-//   enableRedis: true          → 启用 Redis（需配置连接字符串）
-//   redisConnectionString      → Redis 连接字符串，从配置文件中读取
+//   assemblies: null → 自动扫描当前应用程序域的所有程序集
+//
+// 后端选择（v0.2.0 起）：
+//   不再由 AddEnableCaching 的参数决定，而是由注解上的 typeof 决定 ——
+//     不写 cacheManager                        → 框架自带内存后端
+//     cacheManager: typeof(RedisCacheManager)  → Redis 后端（连接首次使用时才建立）
+//
+// 连接从哪来（第十章，两条路可以混用）：
+//   ① 配置：注解上的 cacheManager 是一个 RedisCacheManager 子类，它只重写
+//      ConnectionStringKey；真正的连接参数全在 spring:data:redis 配置节里
+//      —— 见 appsettings.json 与 Managers/ConfigBackendRedisManager.cs。
+//   ② 用户注入：注册一个 IRedisConnectionSource（见下面那行 AddSingleton），
+//      由它自己建连接并认领某个连接名 —— 见 Managers/SamplesInjectedConnectionSource.cs。
+//      这个来源是「用户 @Bean」的语义，路径上【优先于配置】：只要它认领了连接名，
+//      框架连配置都不会去读。
+//
+// ⚠ 连接名打错 / 没配时【不会启动即失败，也不会返回 500】：
+//   连接解析异常是 InvalidOperationException，但读路径被 CacheableHandler.TryReadCache
+//   的 catch (Exception) 吞掉、写路径被 CacheOperationHelper.WriteCache 的同类 catch 吞掉
+//   ⇒ 表现为「缓存永远不命中」（elapsedMs 一直是你方法里的耗时），不是报错。
+//   真正会 500 的只有「cacheManager 写的类型没注册」——那条 InvalidOperationException
+//   会穿透 CacheOperationDispatcher 的降级过滤器。
 // ===================================================================
 
-// 方案 A：仅使用内存缓存（无需 Redis）
-// builder.Services.AddEnableCaching(assemblies: null, enableRedis: false);
+// ===================================================================
+// 第十章：用户自定义连接的缝（Java「自己声明一个 @Bean RedisConnectionFactory」）
+// ===================================================================
+//
+// 这是本样例里唯一一处显式的缓存相关注册。它演示诉求第 2 条 ——
+// 「客户端实现一个框架里的接口，来创建一个连接（只创建一次）」。
+//
+// 本来源认领 appsettings.json 里那个 "redis:samples-injected" 连接名，
+// 并用完全由自己决定的参数建连（db 8 / 自己的 ClientName）—— 因此它是
+// 「用户连接优先于配置」这条契约的活证据（配置里同一个连接名写的是 db 7）。
+//
+// ⚠ 注册位置【不敏感】：框架会按注册顺序依次询问容器里所有 IRedisConnectionSource，
+//   放在 AddEnableCaching() 之前或之后都行。
+// ⚠ 但【不要】把它注册成 Transient/Scoped —— 契约要求「同一个连接名只创建一次」，
+//   而 DI 单例是「只建一次」最省事的实现方式（本类自己也有 lock + 二次检查）。
+// ⚠ 连接由用户创建 ⇒ 归用户释放。注册成单例并由容器释放是推荐做法；
+//   框架的 Dispose 链刻意不碰用户交进来的连接（避免与容器重复释放）。
+builder.Services.AddSingleton<IRedisConnectionSource, SamplesInjectedConnectionSource>();
 
-// 方案 B：启用 Redis 缓存（如已配置 Redis 连接字符串，取消下面注释）
-// var redisConn = builder.Configuration.GetConnectionString("Redis");
-// builder.Services.AddEnableCaching(assemblies: null, enableRedis: true, redisConnectionString: redisConn);
-
-// 方案 C（推荐）：从配置文件中读取 Redis 连接字符串
-// 配置文件格式（参考 tests 项目）：
-//   {
-//     "redis": {
-//       "main-site": "localhost:6379,abortConnect=false"
-//     }
-//   }
-var redisConn = builder.Configuration["redis:main-site"];
-if (!string.IsNullOrEmpty(redisConn))
-{
-    builder.Services.AddEnableCaching(assemblies: null, enableRedis: true, redisConnectionString: redisConn);
-    Console.WriteLine("✓ Redis 缓存已启用");
-}
-else
-{
-    builder.Services.AddEnableCaching(assemblies: null, enableRedis: false);
-    Console.WriteLine("✓ 内存缓存已启用（如需 Redis，请在 appsettings.Development.json 中配置 redis:main-site）");
-}
+builder.Services.AddEnableCaching();
+Console.WriteLine("✓ 缓存已启用（内存后端默认可用；Redis 连接按需建立：配置走 spring:data:redis，用户来源优先）");
 
 // 注册控制器
 builder.Services.AddControllers();

@@ -7,6 +7,7 @@
   <ItemGroup Condition="'$(UseProjectReference)' == 'true'">
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Core\Yzl.Extensions.Core.csproj" />
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Cache\Yzl.Extensions.Cache.csproj" />
+    <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Cache.Redis\Yzl.Extensions.Cache.Redis.csproj" />
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign\Yzl.Extensions.Http.OpenFeign.csproj" />
     <ProjectReference Include="..\..\..\dotnet-extensions\src\Yzl.Extensions.Http.OpenFeign.Abstractions\Yzl.Extensions.Http.OpenFeign.Abstractions.csproj" />
   </ItemGroup>
@@ -14,6 +15,9 @@
   <!-- 默认模式：NuGet 包引用 -->
   <ItemGroup Condition="'$(UseProjectReference)' != 'true'">
     <PackageReference Include="Yzl.Extensions.Cache" />
+    <!-- Redis 后端（v0.2.0 起独立成包）：只要引用就自动注册 RedisCacheManager，
+         不需要任何 AddRedisCache() 调用；连接是首次使用时才建立的。 -->
+    <PackageReference Include="Yzl.Extensions.Cache.Redis" />
     <!-- [IocService] / AddBatchServices() 来自 Core 包（Cache 包已传递引用，此处显式声明以表意清晰） -->
     <PackageReference Include="Yzl.Extensions.Core" />
     <!-- OpenFeign：Service 层通过声明式 HTTP 客户端远程调用 Samples.Api -->

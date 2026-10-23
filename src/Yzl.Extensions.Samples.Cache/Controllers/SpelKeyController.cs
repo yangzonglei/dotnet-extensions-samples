@@ -149,7 +149,7 @@ public class SpelKeyController : ControllerBase
             data = user,
             elapsedMs = sw.ElapsedMilliseconds,
             callCount = _spelKey.CallCount,
-            cacheType = "Redis + 滑动过期",
+            cacheManager = "RedisCacheManager + 滑动过期",
             note = "SpEL 表达式 + Redis 后端 + slidingTtl 组合，需要配置 Redis 连接串"
         });
     }

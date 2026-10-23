@@ -237,7 +237,7 @@ public class SpelKeyService
     /// 需要配置 Redis 连接串才能演示 Redis 功能。
     /// </summary>
     [Cacheable(cacheName: "spel:sliding-redis", key: "#id", ttlSeconds: 86400, slidingTtl: 300,
-               cacheType: CacheType.Redis)]
+               cacheManager: typeof(RedisCacheManager))]
     public virtual UserDto? GetUserSlidingRedis(int id)
     {
         _callCount++;
