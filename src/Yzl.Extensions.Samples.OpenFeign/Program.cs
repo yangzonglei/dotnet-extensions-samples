@@ -3,6 +3,7 @@ using NLog.Web;
 using Yzl.Extensions.Http.OpenFeign;
 using Yzl.Extensions.Http.OpenFeign.Serializer;
 using Yzl.Extensions.Samples.OpenFeign.Acs;
+using Yzl.Extensions.Samples.OpenFeign.Fallbacks;
 using Samples.Models;
 using Yzl.Extensions.Samples.TestDashboard;
 
@@ -49,6 +50,7 @@ app.MapTestDashboard(new TestDashboardOptions
         ["methods"] = ("🔧 HTTP 方法演示", "/demo/methods"),
         ["body"] = ("📝 请求体类型演示", "/demo/body"),
         ["advanced"] = ("⚡ 高级特性演示", "/demo/advanced"),
+        ["fallback"] = ("🛟 降级演示 (fallback / fallbackFactory)", "/demo/fallback/*"),
         ["sse"] = ("📡 SSE 流演示", "/demo/sse"),
         ["download"] = ("⬇️ 文件下载演示", "/download-*"),
         ["feign-api-test"] = ("🔬 扩展测试 (ITestApiFeignClient)", "/feign-api-test"),
@@ -115,6 +117,55 @@ app.MapGet("/demo/advanced", async (IDemoFeignClient client) => new
     timeoutFallback = client.TimeoutWithFallback()
 })
 .WithTest("advanced", "Headers / RawFormat / 自定义解析器 / 超时", order: 4);
+
+// 【12.1】Task 返回值降级（fallback）
+//
+// 上游 /api/timeout 会睡 3 秒，本客户端超时 2 秒 —— 降级必然触发，
+// 因而不依赖「上游挂掉」这种前置条件，比 Cache 样例更容易演示。
+//
+// 修复前：Task 返回值失败时异常会逃出拦截器的 try/catch，
+//         调用方拿到的是 FeignClientException，而不是降级值。
+app.MapGet("/demo/fallback/task", async (IDemoFeignClient client) =>
+{
+    var asyncResult = await client.TimeoutWithFallbackAsync();
+    var syncResult = client.TimeoutWithFallback();
+
+    return new
+    {
+        syncResult,
+        asyncResult,
+        syncDegraded = syncResult == "fallback timeout",
+        asyncDegraded = asyncResult == "fallback timeout (async)",
+        operation = "OpenFeign 超时降级（fallback）",
+        chain = "Program.cs → IDemoFeignClient(fallback) → Samples.Api(/api/timeout, 睡 3s / 客户端超时 2s)",
+        note = "同步与异步两条路径都应由 DemoFeignClientFallback 兜底；"
+             + "若 asyncResult 抛 FeignClientException，说明异步降级未生效"
+    };
+})
+.WithTest("fallback", "Task 返回值降级（fallback）", order: 9);
+
+// 【12.2】降级工厂（fallbackFactory，带失败原因）
+//
+// 另一个 Feign 客户端 IDemoFeignClientFactory，声明的是 fallbackFactory 而不是 fallback。
+// 两者互斥，所以必须单独开接口。
+app.MapGet("/demo/fallback/factory", async (IDemoFeignClientFactory client) =>
+{
+    var asyncResult = await client.TimeoutWithFallbackAsync();
+    var syncResult = client.TimeoutWithFallback();
+
+    return new
+    {
+        syncResult,
+        asyncResult,
+        degraded = syncResult == "factory fallback" && asyncResult == "factory fallback (async)",
+        // 工厂在 Create(cause) 里拿到了失败原因，静态留存给本端点展示
+        degradeReason = DemoFeignClientFallbackFactory.LastCause,
+        operation = "OpenFeign 超时降级（fallbackFactory）",
+        chain = "Program.cs → IDemoFeignClientFactory(fallbackFactory) → Samples.Api(/api/timeout, 睡 3s / 客户端超时 2s)",
+        note = "同步与异步都会走工厂；degradeReason 是 Create(cause) 收到异常链的最内层"
+    };
+})
+.WithTest("fallback", "降级工厂（fallbackFactory）", order: 10);
 
 app.MapGet("/demo/sse", async (ISseDemoFeignClient client, HttpContext context, CancellationToken cancellationToken) =>
 {

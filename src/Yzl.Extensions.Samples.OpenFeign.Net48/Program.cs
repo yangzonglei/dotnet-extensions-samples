@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Yzl.Extensions.Samples.OpenFeign.Net48.Clients;
+using Yzl.Extensions.Samples.OpenFeign.Net48.Fallbacks;
 using Yzl.Extensions.Samples.OpenFeign.Net48.Models;
 
 namespace Yzl.Extensions.Samples.OpenFeign.Net48
@@ -21,6 +22,7 @@ namespace Yzl.Extensions.Samples.OpenFeign.Net48
     /// - 自定义 ResponseResolver（StatusResponseResolver 解析 status/result/message 格式）
     /// - 文件下载（Stream 同步/异步 和 byte[]）
     /// - Fallback 容错
+    /// - 降级工厂（fallbackFactory，同步/异步均可拿到失败原因）
     /// - 超时熔断
     /// - 五种请求体类型（DTO / string / byte[] / Stream / StringContent）
     /// - 全局 HeaderProvider 自动注入
@@ -142,6 +144,22 @@ namespace Yzl.Extensions.Samples.OpenFeign.Net48
                 Console.WriteLine("  请求 /api/timeout (timeout=1000ms, 服务端延迟3000ms)...");
                 var timeoutResult = demoClient.TimeoutWithFallback();
                 Console.WriteLine($"  Timeout Fallback: \"{timeoutResult}\"");
+
+                // ============================================================
+                // 3.6 降级：Task 返回值 fallback + fallbackFactory
+                // ============================================================
+                WriteSection("降级（Task fallback + fallbackFactory）");
+
+                // (a) fallback：同步与异步都应被 DemoFeignClientFallback 兜底。
+                //     修复前异步这条会抛 FeignClientException，而不是返回降级值。
+                Console.WriteLine($"  [fallback] sync  = \"{timeoutResult}\"");
+                Console.WriteLine($"  [fallback] async = \"{await demoClient.TimeoutWithFallbackAsync()}\"");
+
+                // (b) fallbackFactory：换一个声明 fallbackFactory 的客户端，降级时能拿到失败原因。
+                var factoryClient = FeignConfig.GetFeignClient<IDemoFeignClientFactory>();
+                Console.WriteLine($"  [factory]  sync  = \"{factoryClient.TimeoutWithFallback()}\"");
+                Console.WriteLine($"  [factory]  async = \"{await factoryClient.TimeoutWithFallbackAsync()}\"");
+                Console.WriteLine($"  [factory]  cause = {DemoFeignClientFallbackFactory.LastCause}");
 
                 // ============================================================
                 // 3.4 请求体类型演示
