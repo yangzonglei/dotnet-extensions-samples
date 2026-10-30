@@ -7,7 +7,14 @@ using Yzl.Extensions.Http.OpenFeign.Execution.ResponseResolver;
 
 namespace Yzl.Extensions.Samples.OpenFeign.Acs;
 
-[FeignClient(name: "demo-api", url: "{DemoApi:BaseUrl}", fallback: typeof(DemoFeignClientFallback), timeout: 5000)]
+// 降级演示客户端。
+//
+// ⚠️ 超时同时写在「客户端级」和「方法级」，是因为三种形态对 timeout 的读取位置不同：
+//   - runtime-proxy（本样例，16602）：方法级 timeout 生效（拦截器把它写进请求级超时）
+//   - AOT 源生成器（16603）：只读客户端级 timeout，方法级 timeout 会被静默忽略
+//   - Net48 拦截器：同样只读客户端级 timeout
+// 客户端级 2s < 上游 /api/timeout 的 3s，因此三种形态都能稳定触发降级。
+[FeignClient(name: "demo-api", url: "{DemoApi:BaseUrl}", fallback: typeof(DemoFeignClientFallback), timeout: 2000)]
 public interface IDemoFeignClient
 {
     [Get("/api/users/{id}")]
@@ -56,6 +63,13 @@ public interface IDemoFeignClient
     [Trace("/api/methods/trace")]
     Task<object> Trace();
 
-    [Get("/api/timeout", timeout: 1000)]
+    // 同步超时降级：上游 /api/timeout 睡 3 秒，客户端超时 2 秒 —— 降级必然触发，
+    // 不依赖「上游挂掉」这种前置条件
+    [Get("/api/timeout", timeout: 2000)]
     string TimeoutWithFallback();
+
+    // 异步超时降级：与上面同步版同一路径、同一超时，用来对照验证
+    // 「Task 返回值失败时是否同样走 fallback」（修复前这条会抛 FeignClientException）
+    [Get("/api/timeout", timeout: 2000)]
+    Task<string> TimeoutWithFallbackAsync();
 }

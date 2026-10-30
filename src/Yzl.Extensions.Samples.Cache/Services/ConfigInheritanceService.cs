@@ -18,14 +18,14 @@ namespace Yzl.Extensions.Samples.Cache.Services;
 /// ║                                                                ║
 /// ║  [CacheConfig] 可配置的属性：                                  ║
 /// ║  ├─ DefaultCacheName           — 默认缓存区域名称              ║
-/// ║  ├─ DefaultCacheType           — 默认缓存类型（Memory/Redis） ║
+/// ║  ├─ CacheManager               — 默认缓存管理器（后端类型）    ║
 /// ║  ├─ DefaultTtlSeconds          — 默认 TTL 过期时间（秒）       ║
 /// ║  └─ DefaultSlidingExpirationSeconds — 默认滑动过期时间（秒）  ║
 /// ║                                                                ║
 /// ║  注意：缓存键（Key）不会被继承，每个方法必须自行指定！        ║
 /// ╚══════════════════════════════════════════════════════════════════╝
 /// </summary>
-[CacheConfig(defaultCacheName: "config-demo", defaultTtlSeconds: 120, defaultCacheType: CacheType.Memory)]
+[CacheConfig(defaultCacheName: "config-demo", defaultTtlSeconds: 120)]
 [IocService(lifetime: ServiceLifetime.Transient)]
 public class ConfigInheritanceService
 {

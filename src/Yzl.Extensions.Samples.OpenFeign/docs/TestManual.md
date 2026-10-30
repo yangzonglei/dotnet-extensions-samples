@@ -351,6 +351,50 @@ app.MapGet("/feign-api-test", async (ITestApiFeignClient client) => new
 });
 ```
 
+### 2.4 降级接口定义（`fallback` / `fallbackFactory`）
+
+`IDemoFeignClient`（[Acs/IDemoFeignClient.cs](../Acs/IDemoFeignClient.cs)）用 `fallback` 兜底，
+同步与异步各一条超时方法：
+
+```csharp
+[FeignClient(name: "demo-api", url: "{DemoApi:BaseUrl}",
+    fallback: typeof(DemoFeignClientFallback), timeout: 2000)]
+public interface IDemoFeignClient
+{
+    // …其余 CRUD / 下载 / SSE 方法略…
+
+    [Get("/api/timeout", timeout: 2000)]
+    string TimeoutWithFallback();
+
+    [Get("/api/timeout", timeout: 2000)]
+    Task<string> TimeoutWithFallbackAsync();
+}
+```
+
+`IDemoFeignClientFactory`（[Acs/IDemoFeignClientFactory.cs](../Acs/IDemoFeignClientFactory.cs)）用 `fallbackFactory` 兜底：
+
+```csharp
+[FeignClient(name: "demo-api-factory", url: "{DemoApi:BaseUrl}",
+    fallbackFactory: typeof(DemoFeignClientFallbackFactory), timeout: 2000)]
+public interface IDemoFeignClientFactory
+{
+    [Get("/api/timeout", timeout: 2000)]
+    string TimeoutWithFallback();
+
+    [Get("/api/timeout", timeout: 2000)]
+    Task<string> TimeoutWithFallbackAsync();
+}
+```
+
+> **为什么是两个接口**：`fallback` 与 `fallbackFactory` 互斥，同时声明会在注册期直接抛
+> `InvalidOperationException`，所以工厂演示必须单独开一个接口。
+>
+> **为什么超时写在客户端级**：只有 runtime-proxy 形态会读方法级 `[Get(..., timeout: …)]`；
+> AOT 源生成器与 Net48 都**只读客户端级** `[FeignClient(timeout: …)]`，方法级会被静默忽略。
+> 为让三端行为一致，这里统一写成客户端级 2000ms。
+>
+> AOT 侧接口定义相同，仅命名空间为 `Yzl.Extensions.Samples.OpenFeign.AOT.Acs`。
+
 ---
 
 ## 3. 端到端测试用例
@@ -367,6 +411,8 @@ app.MapGet("/feign-api-test", async (ITestApiFeignClient client) => new
 | 6 | `GET /download-async` / `download-sync` / `download-bytes` | `Stream` / `byte[]` 返回类型下载 | 内容为 `OpenFeign file download test content.` |
 | 7 | `GET /read-all` | 一次性跑完全部演示 | 汇总对象 |
 | 8 | `GET /feign-api-test` | `ITestApiFeignClient` 全功能（含超时 / 下载） | 汇总对象 |
+| 9 | `GET /demo/fallback/task` | `Task` 返回值接口方法的 `fallback` 降级（同步 vs 异步对照） | `syncDegraded` + `asyncDegraded` 均为 `true` |
+| 10 | `GET /demo/fallback/factory` | `fallbackFactory` 降级（同步 + 异步都能拿到失败原因） | `degraded = true`，`degradeReason` 非空 |
 
 **测试命令：**
 
@@ -397,16 +443,35 @@ curl -s http://localhost:16602/read-all | jq
 # 8. ITestApiFeignClient 全功能
 curl -s http://localhost:16602/feign-api-test | jq
 
+# 9. Task 返回值降级（fallback）
+curl -s http://localhost:16602/demo/fallback/task | jq
+
+# 10. 降级工厂（fallbackFactory，带失败原因）
+curl -s http://localhost:16602/demo/fallback/factory | jq
+
 # AOT 客户端：端口换 16603
 curl -s http://localhost:16603/demo/basic | jq
 curl -s http://localhost:16603/read-all | jq
+curl -s http://localhost:16603/demo/fallback/task | jq
+curl -s http://localhost:16603/demo/fallback/factory | jq
 ```
 
 **关键断言：**
 
 - `/demo/advanced` 的 `timeoutFallback`：后端 `/api/users/timeout` 延迟 3s，Feign 客户端 `timeout` 属性更短 → 触发 `fallback` 降级，**不抛异常**
+- `/demo/fallback/task`：`syncResult = "fallback timeout"`、`asyncResult = "fallback timeout (async)"`，
+  `syncDegraded` 与 `asyncDegraded` 均为 `true`。
+  **`asyncResult` 若出现 `FeignClientException`，说明 `Task` 返回值接口方法的降级未生效**（这正是本用例要盯的回归点）。
+- `/demo/fallback/factory`：`syncResult = "factory fallback"`、`asyncResult = "factory fallback (async)"`，
+  `degraded = true`；`degradeReason` 非空，且应为异常链的最内层（上游超时场景为
+  `… → SocketException: Operation canceled`，上游不可达场景为 `… → SocketException: Connection refused`）。
+- 两条降级用例都**不应**返回 HTTP 5xx / 裸 `FeignClientException` —— 降级的意义就是把异常挡在调用方之外。
 - `/demo/sse` 输出首行必须是 `event: phase`，最后必须是 `event: done`
 - `/feign-api-test` 的 `header` 字段应含 `X-Token: token-123`，且 `Authorization` 由 `DemoHeaderProvider` 全局注入为 `Bearer demo-token`
+
+> **负向回归（可选）**：停掉 `Samples.Api`（16600）后重跑用例 9 / 10，
+> 仍应返回降级文案，只是 `degradeReason` 从 `Operation canceled`（超时）变成
+> `Connection refused`（连接被拒）——说明「上游不可达」这条路径同样被兜住。
 
 ---
 
@@ -441,6 +506,10 @@ public sealed class DemoHeaderProvider : IFeignRequestHeaderProvider
 | [Acs/IRequestBodyDemoFeignClient.cs](../Acs/IRequestBodyDemoFeignClient.cs) | 5 种请求体类型演示 |
 | [Acs/ISseDemoFeignClient.cs](../Acs/ISseDemoFeignClient.cs) | SSE 流演示 |
 | [Acs/IDownloadClient.cs](../Acs/IDownloadClient.cs) | 文件下载演示 |
+| [Acs/IDemoFeignClientFactory.cs](../Acs/IDemoFeignClientFactory.cs) | `fallbackFactory` 降级演示接口（与 `IDemoFeignClient` 分开，因为 `fallback` / `fallbackFactory` 互斥） |
+| [Fallbacks/DemoFeignClientFallback.cs](../Fallbacks/DemoFeignClientFallback.cs) | `fallback` 降级实现（同步 + `Task<string>` 各一条，返回不同文案以便区分路径） |
+| [Fallbacks/DemoFeignClientFallbackFactory.cs](../Fallbacks/DemoFeignClientFallbackFactory.cs) | `IFeignFallbackFactory` 工厂 + 带失败原因的降级实现 |
 | [HeaderProviders/DemoHeaderProvider.cs](../HeaderProviders/DemoHeaderProvider.cs) | 全局请求头注入 |
 | [Program.cs](../Program.cs) | Runtime-proxy 注册 + 全部测试端点 |
-| [AOT/Program.cs](../../Yzl.Extensions.Samples.OpenFeign.AOT/Program.cs) | AOT 注册（`AddOpenFeignAot` + `AddGeneratedFeignClients`） |
+| [AOT/Program.cs](../../Yzl.Extensions.Samples.OpenFeign.AOT/Program.cs) | AOT 注册（`AddOpenFeignAot` + `AddGeneratedFeignClients`；降级工厂的接口映射由生成器自动注册） |
+| [AOT/Acs/FallbackHandler/DemoFeignClientFallbackFactory.cs](../../Yzl.Extensions.Samples.OpenFeign.AOT/Acs/FallbackHandler/DemoFeignClientFallbackFactory.cs) | AOT 侧 `fallbackFactory` 工厂 |

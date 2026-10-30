@@ -1,5 +1,8 @@
 # Yzl.Extensions.Sentinel.DataSource.Nacos 更新日志
 
+## v0.1.1 [2026/10/13]
+更新Yzl.Extension.Sentinel 版本号 0.1.0->0.1.1
+
 ## v0.1.0 [2026/09/10]
 
 首次发布。`Yzl.Extensions.Sentinel` 的 Nacos 规则数据源扩展：从 Nacos 拉取并长轮询监听流控 / 熔断 / 鉴权规则，并把 Dashboard 上改动的规则写回 Nacos。引包即被核心库自动发现，零代码接入。
@@ -13,19 +16,20 @@
 5. **指数退避重试 2s → 4s → … → 60s**：监听注册与首次拉取失败都自动重试直到成功或进程关停。
 6. **长轮询订阅 `SentinelNacosListener`**：Nacos 配置内容变化 → 回调 `ReceiveConfigInfo` → 更新 `RawProperty` → 核心库 `SentinelDataSourceManager` 热更新对应规则管理器，无需重启。
 7. **`ConfigUseRpc = false`**：强制走 HTTP 协议（非 gRPC），兼容 Nacos 1.x / 2.x。
-8. **写回 `WriteAsync(rules)`**：Dashboard 改规则 → 命令中心 `/setRules` → 内存热更新 → 写回 Nacos。用**本数据源配置的转换器**序列化（`Converter.Serialize`），保证读 / 写方向格式一致（json / xml / 自定义 `converter-class`），不再固定写 JSON。
+8. **规则转换器 SPI 落地**：`converter-class` 反射自定义转换器（优先）> `data-type` 分发 json / xml 内建；`DataType` 是显式格式声明（Json→`"json"`、Xml→`"xml"`，默认 `json`），非法 `data-type` 抛 `NotSupportedException`，不静默清空规则；自定义转换器由 AppDomain 已加载程序集扫描解析。
+9. **坏配置保持 last-good**：解析异常时保持当前规则、绝不把非法内容当「空」清空规则（由核心库 `SentinelDataSourceManager` 统一兜底）。
 
-### 🔧 修复 / 加固
+### ✍️ 规则写回
 
-1. **写回保留配置描述 `desc`（`preserve-desc`，默认 true）**：nacos-sdk-csharp 的 `PublishConfig` 没有 desc 参数，走 SDK 发布会被 Nacos 服务端全量覆盖**清空配置描述**。改为原始 HTTP 发布：
-    - `GET /nacos/v1/cs/configs?show=all&dataId=&group=&tenant=` 读回当前 `desc`（`show=all` 是可靠的 desc 读取方式）
-    - `POST /nacos/v1/cs/configs` 显式传 `content` + `type` + `desc` + `accessToken`
-    - 原始发布失败自动回退 SDK 4 参 `PublishConfig`（保证内容能发布，desc 不保留并记 warning）
-    - 不需要保留 desc 时可配 `"preserve-desc": false`，纯走 SDK 4 参发布
-2. **写回显式传 config `type`**：nacos-sdk-csharp 1.3.6 的 **3 参** `PublishConfig(dataId, group, content)` 内部硬编码 `type="text"`，会把 JSON / XML 配置的 type 元数据重置为 text（Nacos 控制台随之按 text 渲染该配置）。现在 type 由转换器声明（`ISentinelRuleConverter.DataType`，内建 json / xml，默认 json），统一走 4 参发布，**3 参重载不再使用**。
+Dashboard 改规则 → 命令中心 `/setRules` → 内存热更新 → 写回 Nacos。`WriteAsync(rules)` 用**本数据源配置的转换器**序列化（`Converter.Serialize`），保证读 / 写方向格式一致（json / xml / 自定义 `converter-class`），不写死 JSON。
+
+1. **保留配置描述 `desc`（`preserve-desc`，默认 true）**：nacos-sdk-csharp 的 `PublishConfig` 没有 desc 参数，走 SDK 发布会被 Nacos 服务端全量覆盖**清空配置描述**。写回默认走原始 HTTP 发布：
+   - `GET /nacos/v1/cs/configs?show=all&dataId=&group=&tenant=` 读回当前 `desc`（`show=all` 是可靠的 desc 读取方式）
+   - `POST /nacos/v1/cs/configs` 显式传 `content` + `type` + `desc` + `accessToken`
+   - 原始发布失败自动回退 SDK 4 参 `PublishConfig`（保证内容能发布，desc 不保留并记 warning）
+   - 不需要保留 desc 时配置 `"preserve-desc": false`，纯走 SDK 4 参发布
+2. **写回显式传 config `type`**：nacos-sdk-csharp 1.3.6 的 **3 参** `PublishConfig(dataId, group, content)` 内部硬编码 `type="text"`，会把 JSON / XML 配置的 type 元数据重置为 text（Nacos 控制台随之按 text 渲染该配置）。写回 type 由转换器声明（`ISentinelRuleConverter.DataType`），统一走 4 参发布，**不使用 3 参重载**。
 3. **开启 auth 的 Nacos 写回全链路支持**：配置 `username` / `password` 后先登录取 accessToken（`POST /nacos/v1/auth/users/login`，v1 兼容端点 `/nacos/v1/auth/login` 兜底）；**读 desc 与发布都带 token**（不带 token 会 401 读不到 desc，desc 照样被清）；遇 401 / 403 清缓存重登一次、用新 token **重读 desc** 后重发（服务端 token 有 TTL）；发布与读取均按地址列表故障转移。
-4. **规则转换器 SPI 落地**：`converter-class` 反射自定义转换器（优先）> `data-type` 分发 json / xml 内建；非法 `data-type` 抛 `NotSupportedException`，不再静默清空规则（`DataType` 从「是不是 json」的开关变为显式格式声明）；自定义转换器由 AppDomain 已加载程序集扫描解析。
-5. **坏配置保持 last-good**：解析异常时保持当前规则、绝不把非法内容当「空」清空规则（由核心库 `SentinelDataSourceManager` 统一兜底），写回与读方向使用同一转换器，不破坏自定义格式。
 
 ### ⚙️ 配置
 
@@ -92,7 +96,7 @@
 
 ### 📚 文档
 
-1. 新增包内文档 `Yzl.Extensions.Sentinel.DataSource.Nacos.md`（定位、架构图、快速开始、配置模型、核心类、拉取 / 监听流程、写回流程、对外接口、注意事项）。
+1. 包内文档 `Yzl.Extensions.Sentinel.DataSource.Nacos.md`（定位、架构图、快速开始、配置模型、核心类、拉取 / 监听流程、写回流程、对外接口、注意事项）。
 
 ### 依赖
 

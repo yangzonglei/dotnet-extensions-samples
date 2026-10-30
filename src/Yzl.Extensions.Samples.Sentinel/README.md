@@ -57,8 +57,8 @@ dotnet run --project src/Yzl.Extensions.Samples.Sentinel
 spring:
   cloud:
     sentinel:
-      enabled: true            # 全局开关；false 时全部放行
-      eager: true              # 启动即加载规则，保证首个请求已有规则
+      enabled: true            # 功能总开关；false 时整个 Sentinel 不装配（无命令中心/Dashboard 注册/限流）
+      eager: true              # 保留字段，当前无实现（装配在启动时同步完成）
       transport:
         dashboard: 127.0.0.1:8080
         port: 8719             # 命令中心端口

@@ -84,6 +84,32 @@ public class AsyncCacheController : ControllerBase
     }
 
     /// <summary>
+    /// 【6.4】异步 + 短 TTL + Unless 对照组
+    ///
+    /// 与 6.1 的区别只有一处：<c>GetHotUserAsync</c> 带 <c>unless = "#result == null"</c>。
+    /// v0.2.0 起框架默认把 null 也写进缓存（对齐 Spring/Java），
+    /// 所以这是<b>逐方法</b>退回旧行为的唯一写法 —— 不存在的 id 每次都会真实执行。
+    /// 对照 <c>GET async/{id}</c>（无 unless）：同一个不存在的 id 第二次即命中。
+    /// </summary>
+    [Description("【6.4】异步 unless 对照（null 不缓存）")]
+    [HttpGet("hot/{id}")]
+    public async Task<IActionResult> AsyncHot(int id)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var user = await _async.GetHotUserAsync(id);
+        sw.Stop();
+        return Ok(new
+        {
+            data = user,
+            elapsedMs = sw.ElapsedMilliseconds,
+            callCount = _async.CallCount,
+            operation = "异步 Cacheable + Unless",
+            unless = "#result == null",
+            note = "带 unless 时返回 null 不写缓存；去掉 unless 后同样的 id 第二次就会命中"
+        });
+    }
+
+    /// <summary>
     /// 查看 AsyncCache 实际方法执行次数
     /// </summary>
     [Description("📊 GetUserAsync 执行次数")]

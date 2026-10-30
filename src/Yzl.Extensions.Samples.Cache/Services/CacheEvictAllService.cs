@@ -121,14 +121,34 @@ public class CacheEvictAllService
     /// <summary>
     /// 【CacheEvict AllEntries — Redis 版本】
     ///
-    /// allEntries 同样支持 Redis 后端，会清除 Redis 中指定前缀的所有键。
+    /// allEntries 同样支持 Redis 后端，会清除 Redis 中指定前缀的所有键
+    /// （<c>SCAN 'redis:evict-all*'</c> + <c>DEL</c>，顺带带走滑动过期的伴生 deadline 键）。
+    ///
+    /// 与 9.3 的对比是本例的重点：内存后端的 <c>RemoveByPrefixAsync</c> 是空操作
+    /// （<c>MemoryCache</c> 原生不支持前缀枚举），所以 9.3 看起来「清掉了」其实没有；
+    /// 只有 Redis 后端才是真的按前缀批量驱逐。
     /// </summary>
-    [CacheEvict(cacheName: "redis:evict-all", allEntries: true, cacheType: CacheType.Redis)]
+    [CacheEvict(cacheName: "redis:evict-all", allEntries: true, cacheManager: typeof(RedisCacheManager))]
     public virtual void EvictAllFromRedis()
     {
         _callCount++;
         Console.WriteLine("[Redis批量清除] 清除 Redis 中 'redis:evict-all' 前缀的所有缓存！");
         Thread.Sleep(500);
+    }
+
+    /// <summary>
+    /// 【写入 Redis 缓存】供 9.4 的 allEntries 演示读取。
+    ///
+    /// 键 <c>redis:evict-all:{id}</c>，落在 redis:main-site 的 db 11。
+    /// </summary>
+    [Cacheable(cacheName: "redis:evict-all", key: "#id", ttlSeconds: 300,
+               cacheManager: typeof(RedisCacheManager))]
+    public virtual UserDto? GetUserFromRedis(int id)
+    {
+        _callCount++;
+        Console.WriteLine($"[Redis缓存写入] 执行查询：id={id}（缓存到 redis:evict-all 区域）");
+        Thread.Sleep(1500);
+        return _users.FirstOrDefault(u => u.Id == id);
     }
 
     // ===================================================================
